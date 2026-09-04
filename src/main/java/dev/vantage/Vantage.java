@@ -2,6 +2,7 @@ package dev.vantage;
 
 import dev.vantage.config.ConfigManager;
 import dev.vantage.module.ModuleManager;
+import dev.vantage.module.impl.client.ClickGuiModule;
 import net.minecraft.client.Minecraft;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.fml.common.FMLCommonHandler;
@@ -67,6 +68,7 @@ public class Vantage {
         MinecraftForge.EVENT_BUS.register(moduleManager);
         FMLCommonHandler.instance().bus().register(moduleManager);
 
+        registerModules();
         loadConfig();
 
         // The client has no reliable shutdown event, and Minecraft can exit without unwinding, so
@@ -74,6 +76,10 @@ public class Vantage {
         Runtime.getRuntime().addShutdownHook(new Thread(this::saveConfig, MOD_NAME + "-config-save"));
 
         LOGGER.info("[{}] ready with {} modules", MOD_NAME, moduleManager.getModules().size());
+    }
+
+    private void registerModules() {
+        moduleManager.register(new ClickGuiModule());
     }
 
     public void loadConfig() {
