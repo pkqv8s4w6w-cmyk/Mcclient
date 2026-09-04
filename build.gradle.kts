@@ -22,6 +22,11 @@ dependencies {
     minecraft("com.mojang:minecraft:1.8.9")
     mappings("de.oceanlabs.mcp:mcp_stable:22-1.8.9")
     forge("net.minecraftforge:forge:1.8.9-11.15.1.2318-1.8.9")
+
+    // The Minecraft-free packages (setting, config, threat, detect, hypixel) are tested directly
+    // on the build JDK. Anything touching Minecraft has to be checked in-game instead.
+    testImplementation("org.junit.jupiter:junit-jupiter:5.10.2")
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
 loom {
@@ -36,11 +41,18 @@ loom {
     }
 }
 
+tasks.test {
+    useJUnitPlatform()
+    testLogging { events("passed", "skipped", "failed") }
+}
+
 tasks.withType<JavaCompile>().configureEach {
     options.encoding = "UTF-8"
     // Minecraft 1.8.9 runs on Java 8. Compiling with --release keeps us honest about the API
     // surface even though the build itself runs on a modern JDK.
     options.release.set(8)
+    // Targeting 8 is the point, so the "source value 8 is obsolete" notice is just noise.
+    options.compilerArgs.add("-Xlint:-options")
 }
 
 tasks.processResources {

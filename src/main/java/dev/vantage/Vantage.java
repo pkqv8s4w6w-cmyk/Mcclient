@@ -1,10 +1,18 @@
 package dev.vantage;
 
+import dev.vantage.config.ConfigManager;
+import dev.vantage.module.ModuleManager;
+import net.minecraft.client.Minecraft;
+import net.minecraftforge.common.MinecraftForge;
+import net.minecraftforge.fml.common.FMLCommonHandler;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.common.event.FMLInitializationEvent;
 import net.minecraftforge.fml.common.event.FMLPreInitializationEvent;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+
+import java.io.IOException;
+import java.nio.file.Path;
 
 /**
  * Entry point for the Vantage client.
@@ -24,17 +32,81 @@ public class Vantage {
     @Mod.Instance(MOD_ID)
     private static Vantage instance;
 
+    private ModuleManager moduleManager;
+    private ConfigManager configManager;
+    private String activeProfile = "default";
+
     public static Vantage instance() {
         return instance;
     }
 
+    public ModuleManager modules() {
+        return moduleManager;
+    }
+
+    public ConfigManager config() {
+        return configManager;
+    }
+
+    public String getActiveProfile() {
+        return activeProfile;
+    }
+
     @Mod.EventHandler
     public void preInit(FMLPreInitializationEvent event) {
-        LOGGER.info("[{}] pre-init, version {}", MOD_NAME, VERSION);
+        Path dataDirectory = Minecraft.getMinecraft().mcDataDir.toPath().resolve(MOD_ID);
+        configManager = new ConfigManager(dataDirectory);
+        moduleManager = new ModuleManager();
+        LOGGER.info("[{}] pre-init, version {}, data at {}", MOD_NAME, VERSION, dataDirectory);
     }
 
     @Mod.EventHandler
     public void init(FMLInitializationEvent event) {
-        LOGGER.info("[{}] ready", MOD_NAME);
+        // Tick and input events live on the FML bus in 1.8.9; render and world events live on the
+        // Forge bus. Registering on both means ModuleManager sees all of them.
+        MinecraftForge.EVENT_BUS.register(moduleManager);
+        FMLCommonHandler.instance().bus().register(moduleManager);
+
+        loadConfig();
+
+        // The client has no reliable shutdown event, and Minecraft can exit without unwinding, so
+        // persist on JVM shutdown as well as on the explicit saves the GUI performs.
+        Runtime.getRuntime().addShutdownHook(new Thread(this::saveConfig, MOD_NAME + "-config-save"));
+
+        LOGGER.info("[{}] ready with {} modules", MOD_NAME, moduleManager.getModules().size());
+    }
+
+    public void loadConfig() {
+        try {
+            activeProfile = configManager.getActiveProfile();
+            boolean existed = configManager.load(activeProfile, moduleManager.getModules());
+            LOGGER.info("[{}] {} profile '{}'", MOD_NAME, existed ? "loaded" : "no saved", activeProfile);
+        } catch (IOException failure) {
+            // Keep the compiled-in defaults rather than refusing to start.
+            LOGGER.error("[{}] could not read profile '{}'; using defaults", MOD_NAME, activeProfile, failure);
+        }
+    }
+
+    public void saveConfig() {
+        if (configManager == null || moduleManager == null) {
+            return;
+        }
+        try {
+            configManager.save(activeProfile, moduleManager.getModules());
+        } catch (IOException failure) {
+            LOGGER.error("[{}] could not write profile '{}'", MOD_NAME, activeProfile, failure);
+        }
+    }
+
+    public void switchProfile(String profile) {
+        saveConfig();
+        try {
+            activeProfile = ConfigManager.sanitiseProfileName(profile);
+            configManager.setActiveProfile(activeProfile);
+            ConfigManager.resetToDefaults(moduleManager.getModules());
+            configManager.load(activeProfile, moduleManager.getModules());
+        } catch (IOException failure) {
+            LOGGER.error("[{}] could not switch to profile '{}'", MOD_NAME, profile, failure);
+        }
     }
 }
