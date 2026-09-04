@@ -7,6 +7,7 @@ import dev.vantage.gui.Theme;
 import dev.vantage.gui.font.Fonts;
 import dev.vantage.gui.render.RenderUtil;
 import dev.vantage.hud.HudModule;
+import dev.vantage.module.Category;
 import dev.vantage.hypixel.ApiKeyStore;
 import dev.vantage.hypixel.BedwarsStats;
 import dev.vantage.setting.BooleanSetting;
@@ -74,7 +75,7 @@ public class ThreatListHud extends HudModule {
     private int rowsShown;
 
     public ThreatListHud() {
-        super("Threat List", "Ranks the lobby by how dangerous each player is");
+        super("Threat List", Category.ANALYSIS, "Ranks the lobby by how dangerous each player is");
 
         // The key lives in its own file, never in the shared config profile.
         apiKey.notPersisted();

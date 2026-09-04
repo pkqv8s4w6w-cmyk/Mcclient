@@ -37,7 +37,12 @@ public abstract class HudModule extends Module {
             "Opacity", "How solid the background panel is", 70.0, 0.0, 100.0, 5.0, "%"));
 
     protected HudModule(String name, String description) {
-        super(name, Category.HUD, description);
+        this(name, Category.HUD, description);
+    }
+
+    /** For elements that belong somewhere other than the HUD list, such as the threat ranking. */
+    protected HudModule(String name, Category category, String description) {
+        super(name, category, description);
         // The opacity slider is meaningless with no panel to fade, so hide it when off.
         opacity.visibleWhen(backdrop::value);
     }

@@ -24,12 +24,18 @@ public final class RenderUtil {
         GlStateManager.pushMatrix();
         GlStateManager.enableBlend();
         GlStateManager.disableTexture2D();
+        // Culling must be off. Vanilla's drawRect happens to wind counter-clockwise in the
+        // flipped GUI projection and so survives back-face culling; the rounded shapes here trace
+        // their perimeter clockwise, which the driver would discard entirely - filled shapes
+        // vanish while their outlines, which are never culled, still draw.
+        GlStateManager.disableCull();
         GlStateManager.tryBlendFuncSeparate(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA, 1, 0);
         GlStateManager.shadeModel(GL11.GL_SMOOTH);
     }
 
     private static void endShapes() {
         GlStateManager.shadeModel(GL11.GL_FLAT);
+        GlStateManager.enableCull();
         GlStateManager.enableTexture2D();
         GlStateManager.disableBlend();
         GlStateManager.color(1.0f, 1.0f, 1.0f, 1.0f);

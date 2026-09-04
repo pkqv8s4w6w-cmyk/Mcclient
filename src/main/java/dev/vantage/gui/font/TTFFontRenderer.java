@@ -29,8 +29,11 @@ import java.util.Map;
  */
 public final class TTFFontRenderer {
 
-    /** Bake at twice the display size so downscaling hides the rasteriser's pixel grid. */
-    private static final int SUPERSAMPLE = 2;
+    /**
+     * Bake at three times the display size so downscaling hides the rasteriser's pixel grid. Text
+     * this small needs the extra headroom; at 2x the stems of an 8 unit glyph land on half pixels.
+     */
+    private static final int SUPERSAMPLE = 3;
 
     private static final int PADDING = 2;
     private static final int MAX_ATLAS_WIDTH = 2048;

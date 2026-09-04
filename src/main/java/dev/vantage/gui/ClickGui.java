@@ -33,9 +33,10 @@ public class ClickGui extends GuiScreen {
     private static final float WINDOW_WIDTH = 540.0f;
     private static final float WINDOW_HEIGHT = 348.0f;
     private static final float RAIL_WIDTH = 66.0f;
-    private static final float HEADER_HEIGHT = 42.0f;
+    private static final float HEADER_HEIGHT = 46.0f;
     private static final float CONTENT_PADDING = 10.0f;
     private static final float SCROLLBAR_WIDTH = 3.0f;
+    private static final float SEARCH_HEIGHT = 18.0f;
 
     private final Map<Category, List<ModuleRow>> rowsByCategory = new EnumMap<Category, List<ModuleRow>>(Category.class);
     private final List<ModuleRow> allRows = new ArrayList<ModuleRow>();
@@ -250,7 +251,7 @@ public class ClickGui extends GuiScreen {
             boolean hovered = mouseX >= railX + 6 && mouseX <= railX + RAIL_WIDTH - 6
                     && mouseY >= itemY && mouseY <= itemY + itemHeight - 3;
             int colour = category == selected ? Theme.accent() : (hovered ? Theme.TEXT : Theme.TEXT_MUTED);
-            Fonts.SMALL.drawString(category.getDisplayName(), railX + 14.0f, itemY + 6.0f,
+            Fonts.SMALL.drawString(category.getDisplayName(), railX + 14.0f, itemY + 7.0f,
                     RenderUtil.withAlpha(colour, fade));
         }
     }
@@ -260,25 +261,26 @@ public class ClickGui extends GuiScreen {
         float headerY = windowY() + 11.0f;
         float fieldWidth = contentWidth();
 
-        RenderUtil.roundedRect(headerX, headerY, fieldWidth, 20.0f, 5.0,
+        float textY = headerY + (SEARCH_HEIGHT - Fonts.SMALL.getHeight()) / 2.0f;
+        RenderUtil.roundedRect(headerX, headerY, fieldWidth, SEARCH_HEIGHT, 5.0,
                 RenderUtil.withAlpha(0xFF101216, fade));
-        RenderUtil.roundedOutline(headerX, headerY, fieldWidth, 20.0f, 5.0, 1.0f,
+        RenderUtil.roundedOutline(headerX, headerY, fieldWidth, SEARCH_HEIGHT, 5.0, 1.0f,
                 RenderUtil.withAlpha(searchFocused ? Theme.accent() : Theme.BORDER, fade));
 
         if (search.isEmpty() && !searchFocused) {
-            Fonts.SMALL.drawString("Search modules", headerX + 8.0f, headerY + 4.5f,
+            Fonts.SMALL.drawString("Search modules", headerX + 8.0f, textY,
                     RenderUtil.withAlpha(Theme.TEXT_FAINT, fade));
         } else {
-            float endX = Fonts.SMALL.drawString(search, headerX + 8.0f, headerY + 4.5f,
+            float endX = Fonts.SMALL.drawString(search, headerX + 8.0f, textY,
                     RenderUtil.withAlpha(Theme.TEXT, fade));
             if (searchFocused && (System.currentTimeMillis() / 500) % 2 == 0) {
-                RenderUtil.rect(endX + 1.0f, headerY + 4.5f, 0.8f, 11.0f,
+                RenderUtil.rect(endX + 1.0f, textY, 0.8f, Fonts.SMALL.getHeight() - 2.0f,
                         RenderUtil.withAlpha(Theme.accent(), fade));
             }
         }
 
         String hint = search.trim().isEmpty() ? selected.getDescription() : visibleRows().size() + " matching";
-        Fonts.TINY.drawRightAligned(hint, headerX + fieldWidth - 8.0f, headerY + 25.0f,
+        Fonts.TINY.drawRightAligned(hint, headerX + fieldWidth - 2.0f, headerY + SEARCH_HEIGHT + 3.0f,
                 RenderUtil.withAlpha(Theme.TEXT_FAINT, fade));
     }
 
@@ -293,9 +295,10 @@ public class ClickGui extends GuiScreen {
 
         for (ModuleRow row : rows) {
             float rowHeight = row.getHeight();
-            // Skip rows scrolled fully out of view; with settings open the list gets long.
+            // Bounds are set even for rows that are not drawn, so one scrolled out of view cannot
+            // keep stale coordinates from an earlier frame and swallow a click meant for another.
+            row.setBounds(contentX(), cursor, contentWidth());
             if (cursor + rowHeight >= contentY() - 4.0f && cursor <= contentY() + contentHeight() + 4.0f) {
-                row.setBounds(contentX(), cursor, contentWidth());
                 row.render(mouseX, mouseY);
             }
             cursor += rowHeight + gap;
@@ -353,7 +356,7 @@ public class ClickGui extends GuiScreen {
 
         float headerY = windowY() + 11.0f;
         boolean onSearch = mouseX >= contentX() && mouseX <= contentX() + contentWidth()
-                && mouseY >= headerY && mouseY <= headerY + 20.0f;
+                && mouseY >= headerY && mouseY <= headerY + SEARCH_HEIGHT;
         if (mouseButton == 0) {
             searchFocused = onSearch;
         }
