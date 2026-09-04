@@ -2,10 +2,19 @@ package dev.vantage;
 
 import dev.vantage.config.ConfigManager;
 import dev.vantage.module.ModuleManager;
-import dev.vantage.module.impl.client.ClickGuiModule;
-import dev.vantage.module.impl.client.HudEditorModule;
+import dev.vantage.hud.impl.ArmourHud;
+import dev.vantage.hud.impl.CpsHud;
+import dev.vantage.hud.impl.InfoHud;
+import dev.vantage.hud.impl.KeystrokesHud;
+import dev.vantage.hud.impl.PotionHud;
 import dev.vantage.hud.impl.ThreatListHud;
 import dev.vantage.module.impl.analysis.CheatDetectorModule;
+import dev.vantage.module.impl.client.ClickGuiModule;
+import dev.vantage.module.impl.client.HudEditorModule;
+import dev.vantage.module.impl.client.ModsManagerModule;
+import dev.vantage.module.impl.utility.ToggleSprintModule;
+import dev.vantage.module.impl.utility.ZoomModule;
+import dev.vantage.module.impl.visual.FullbrightModule;
 import net.minecraft.client.Minecraft;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.fml.common.FMLCommonHandler;
@@ -83,10 +92,23 @@ public class Vantage {
 
     private void registerModules() {
         moduleManager.registerAll(
+                // Analysis
+                new ThreatListHud(),
+                new CheatDetectorModule(),
+                // HUD
+                new KeystrokesHud(),
+                new CpsHud(),
+                new InfoHud(),
+                new ArmourHud(),
+                new PotionHud(),
+                // Utility and visual
+                new ZoomModule(),
+                new ToggleSprintModule(),
+                new FullbrightModule(),
+                // Client
                 new ClickGuiModule(),
                 new HudEditorModule(),
-                new ThreatListHud(),
-                new CheatDetectorModule());
+                new ModsManagerModule());
     }
 
     public void loadConfig() {
