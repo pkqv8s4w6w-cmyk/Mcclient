@@ -1,6 +1,7 @@
 package dev.vantage.hud.impl;
 
 import dev.vantage.Vantage;
+import dev.vantage.detect.Flagged;
 import dev.vantage.game.TeamColour;
 import dev.vantage.gui.Theme;
 import dev.vantage.gui.font.Fonts;
@@ -45,6 +46,8 @@ public class ThreatListHud extends HudModule {
             "Gear", "Show current armour and weapon", true));
     private final BooleanSetting enemiesOnly = register(new BooleanSetting(
             "Enemies Only", "Hide your own team", false));
+    private final BooleanSetting markDetections = register(new BooleanSetting(
+            "Mark Detections", "Highlight players the cheat detector has flagged", true));
 
     private final NumberSetting statsWeight = register(new NumberSetting(
             "Stats Weight", "How much lifetime stats count", 45, 0, 100, 5, "%"));
@@ -163,7 +166,11 @@ public class ThreatListHud extends HudModule {
             if (showTeam.value()) {
                 teamColumn = Math.max(teamColumn, Fonts.SMALL.getWidth(entry.getTeam()));
             }
-            nameColumn = Math.max(nameColumn, Fonts.SMALL.getWidth(entry.getName()));
+            float nameWidth = Fonts.SMALL.getWidth(entry.getName());
+            if (markDetections.value() && Flagged.is(entry.getName())) {
+                nameWidth += 6.0f; // room for the detection dot
+            }
+            nameColumn = Math.max(nameColumn, nameWidth);
             if (showRatio.value()) {
                 ratioColumn = Math.max(ratioColumn, Fonts.SMALL.getWidth(ratioText(entry)));
             }
@@ -248,8 +255,15 @@ public class ThreatListHud extends HudModule {
 
         x += COLUMN_GAP;
         // An unresolved player is dimmed, so a name with no stats behind it is obvious.
-        int nameColour = entry.isStatsCounted() ? Theme.TEXT : Theme.TEXT_MUTED;
+        boolean flagged = markDetections.value() && Flagged.is(entry.getName());
+        int nameColour = flagged
+                ? Theme.DANGER
+                : (entry.isStatsCounted() ? Theme.TEXT : Theme.TEXT_MUTED);
         Fonts.SMALL.drawString(entry.getName(), x, y, nameColour);
+        if (flagged) {
+            // A dot as well as the colour, so the mark survives a colour-blind reading.
+            RenderUtil.circle(x + nameColumn + 3.0f, y + ROW_HEIGHT / 2.0f - 1.0f, 1.6f, Theme.DANGER);
+        }
         x += nameColumn;
 
         if (ratioColumn > 0.0f) {

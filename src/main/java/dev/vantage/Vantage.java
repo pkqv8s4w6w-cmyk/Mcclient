@@ -5,6 +5,7 @@ import dev.vantage.module.ModuleManager;
 import dev.vantage.module.impl.client.ClickGuiModule;
 import dev.vantage.module.impl.client.HudEditorModule;
 import dev.vantage.hud.impl.ThreatListHud;
+import dev.vantage.module.impl.analysis.CheatDetectorModule;
 import net.minecraft.client.Minecraft;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.fml.common.FMLCommonHandler;
@@ -84,7 +85,8 @@ public class Vantage {
         moduleManager.registerAll(
                 new ClickGuiModule(),
                 new HudEditorModule(),
-                new ThreatListHud());
+                new ThreatListHud(),
+                new CheatDetectorModule());
     }
 
     public void loadConfig() {
