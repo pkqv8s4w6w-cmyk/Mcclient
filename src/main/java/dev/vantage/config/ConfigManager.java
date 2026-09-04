@@ -107,6 +107,9 @@ public final class ConfigManager {
 
             JsonObject settingTree = new JsonObject();
             for (Setting<?> setting : module.getSettings()) {
+                if (!setting.isPersisted()) {
+                    continue;
+                }
                 settingTree.add(setting.getConfigKey(), setting.write());
             }
             entry.add("settings", settingTree);
@@ -187,6 +190,9 @@ public final class ConfigManager {
         }
         JsonObject settingTree = entry.getAsJsonObject("settings");
         for (Setting<?> setting : module.getSettings()) {
+            if (!setting.isPersisted()) {
+                continue;
+            }
             JsonElement value = settingTree.get(setting.getConfigKey());
             if (value == null) {
                 continue;

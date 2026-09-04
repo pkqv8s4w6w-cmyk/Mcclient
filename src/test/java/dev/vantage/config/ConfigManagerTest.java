@@ -173,6 +173,49 @@ class ConfigManagerTest {
         }
     }
 
+    /** Mirrors the shape of the module that holds the Hypixel API key. */
+    static class SecretHoldingModule extends Module {
+        final StringSetting secret = register(new StringSetting("Api Key", "", ""));
+        final BooleanSetting ordinary = register(new BooleanSetting("Ordinary", "", false));
+
+        SecretHoldingModule() {
+            super("Holder", Category.UTILITY, "");
+            secret.notPersisted();
+        }
+    }
+
+    @Test
+    void aNonPersistedSettingNeverReachesTheProfile(@TempDir Path dir) throws IOException {
+        ConfigManager config = new ConfigManager(dir);
+        SecretHoldingModule module = new SecretHoldingModule();
+        module.secret.set("11111111-2222-3333-4444-555555555555");
+        module.ordinary.set(true);
+        config.save("default", Collections.<Module>singletonList(module));
+
+        String written = new String(Files.readAllBytes(config.profileFile("default")), StandardCharsets.UTF_8);
+        assertFalse(written.contains("11111111-2222-3333-4444-555555555555"),
+                "profiles get shared between people, so the key must not be in one");
+        assertFalse(written.contains("api_key"));
+        assertTrue(written.contains("ordinary"), "ordinary settings should still be saved");
+    }
+
+    @Test
+    void aNonPersistedSettingIsNotOverwrittenOnLoad(@TempDir Path dir) throws IOException {
+        ConfigManager config = new ConfigManager(dir);
+        Files.createDirectories(dir.resolve("profiles"));
+        // A profile that has had a key injected into it by hand must not be able to set one.
+        Files.write(dir.resolve("profiles").resolve("default.json"),
+                ("{\"version\":1,\"modules\":{\"holder\":{\"enabled\":true,\"settings\":"
+                        + "{\"api_key\":\"injected-key\",\"ordinary\":true}}}}")
+                        .getBytes(StandardCharsets.UTF_8));
+
+        SecretHoldingModule module = new SecretHoldingModule();
+        config.load("default", Collections.<Module>singletonList(module));
+
+        assertEquals("", module.secret.get(), "a profile must not be able to inject a key");
+        assertTrue(module.ordinary.value());
+    }
+
     @Test
     void resetRestoresCompiledDefaults(@TempDir Path dir) {
         SampleModule module = new SampleModule();

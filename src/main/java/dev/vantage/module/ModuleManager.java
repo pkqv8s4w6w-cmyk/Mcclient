@@ -2,6 +2,8 @@ package dev.vantage.module;
 
 import dev.vantage.Vantage;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.multiplayer.WorldClient;
+import net.minecraftforge.client.event.ClientChatReceivedEvent;
 import net.minecraftforge.client.event.RenderGameOverlayEvent;
 import net.minecraftforge.client.event.RenderWorldLastEvent;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
@@ -26,6 +28,7 @@ import java.util.Map;
 public final class ModuleManager {
 
     private final List<Module> modules = new ArrayList<>();
+    private WorldClient lastWorld;
     private final Map<String, Module> byConfigKey = new LinkedHashMap<>();
 
     public void register(Module module) {
@@ -90,7 +93,20 @@ public final class ModuleManager {
         }
         Minecraft mc = Minecraft.getMinecraft();
         if (mc.theWorld == null || mc.thePlayer == null) {
+            lastWorld = null;
             return;
+        }
+        // Joining a new game gives a fresh world instance, which is the signal to drop per-game
+        // state such as this round's kill counts.
+        if (mc.theWorld != lastWorld) {
+            lastWorld = mc.theWorld;
+            for (Module module : modules) {
+                try {
+                    module.onWorldChanged();
+                } catch (Throwable failure) {
+                    disableAfterFailure(module, "onWorldChanged", failure);
+                }
+            }
         }
         for (int i = 0; i < modules.size(); i++) {
             Module module = modules.get(i);
@@ -134,6 +150,24 @@ public final class ModuleManager {
                 module.onRenderWorld(event.partialTicks);
             } catch (Throwable failure) {
                 disableAfterFailure(module, "onRenderWorld", failure);
+            }
+        }
+    }
+
+    @SubscribeEvent
+    public void onChat(ClientChatReceivedEvent event) {
+        if (event.message == null) {
+            return;
+        }
+        String raw = event.message.getFormattedText();
+        for (Module module : modules) {
+            if (!module.isEnabled()) {
+                continue;
+            }
+            try {
+                module.onChatMessage(raw);
+            } catch (Throwable failure) {
+                disableAfterFailure(module, "onChatMessage", failure);
             }
         }
     }

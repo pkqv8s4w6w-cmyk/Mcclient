@@ -24,6 +24,7 @@ public abstract class Setting<T> {
     private T value;
     private BooleanSupplier visibility = () -> true;
     private Consumer<T> listener;
+    private boolean persisted = true;
 
     protected Setting(String name, String description, T defaultValue) {
         if (name == null || name.isEmpty()) {
@@ -101,6 +102,21 @@ public abstract class Setting<T> {
 
     public boolean isVisible() {
         return visibility.getAsBoolean();
+    }
+
+    /**
+     * Marks this setting as never written to a config profile.
+     *
+     * <p>For values that live somewhere else on purpose. The Hypixel API key uses this: profiles
+     * are the thing people hand to a friend to copy a setup, and a key must not ride along.
+     */
+    public Setting<T> notPersisted() {
+        this.persisted = false;
+        return this;
+    }
+
+    public boolean isPersisted() {
+        return persisted;
     }
 
     public Setting<T> onChange(Consumer<T> callback) {

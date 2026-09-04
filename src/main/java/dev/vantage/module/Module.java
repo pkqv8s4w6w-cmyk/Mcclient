@@ -146,6 +146,14 @@ public abstract class Module {
     public void onRenderWorld(float partialTicks) {
     }
 
+    /** A chat line arrived, colour codes and all. */
+    public void onChatMessage(String raw) {
+    }
+
+    /** The player moved to a different world, so per-game state should be dropped. */
+    public void onWorldChanged() {
+    }
+
     @Override
     public String toString() {
         return "Module(" + name + ")";
