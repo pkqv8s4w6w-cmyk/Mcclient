@@ -1,0 +1,13 @@
+[
+  {
+    "modid": "${modId}",
+    "name": "${modName}",
+    "description": "Information client for Minecraft 1.8.9. Threat ranking, cheat detection and a clean HUD.",
+    "version": "${version}",
+    "mcversion": "1.8.9",
+    "url": "",
+    "authorList": [],
+    "credits": "",
+    "useDependencyInformation": false
+  }
+]
