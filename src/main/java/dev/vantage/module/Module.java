@@ -65,6 +65,18 @@ public abstract class Module {
         Collections.addAll(settings, toRegister);
     }
 
+    /**
+     * Registers a setting that is saved and loaded but never shown in the menu.
+     *
+     * <p>For state the user edits by some other means - a HUD element's position, which is set by
+     * dragging it - so it persists without putting a meaningless slider in the settings list.
+     */
+    protected <S extends Setting<?>> S registerHidden(S setting) {
+        setting.visibleWhen(() -> false);
+        settings.add(setting);
+        return setting;
+    }
+
     public List<Setting<?>> getSettings() {
         return Collections.unmodifiableList(settings);
     }
