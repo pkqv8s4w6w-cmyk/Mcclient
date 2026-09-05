@@ -1,6 +1,7 @@
 package dev.vantage.threat;
 
 import dev.vantage.Vantage;
+import dev.vantage.detect.Flagged;
 import dev.vantage.game.DeathMessageParser;
 import dev.vantage.game.LobbyReader;
 import dev.vantage.game.SidebarParser;
@@ -172,18 +173,26 @@ public final class ThreatTracker {
             TeamState state = teamStates.get(team.getDisplayName().toLowerCase(java.util.Locale.ROOT));
             EntityPlayer entity = LobbyReader.findEntity(player.name);
 
-            inputs.add(ThreatInput.builder(player.name)
+            ThreatInput.Builder builder = ThreatInput.builder(player.name)
                     .team(team.getDisplayName(), team.getColourCode())
                     .stats(stats)
                     // Only call them nicked once a lookup actually came back empty; before that
                     // the stats are merely not fetched yet.
                     .nicked(stats.isUnknown() && !cache.needsFetch(player.uuid) && !cache.isFailed(player.uuid))
-                    .gear(entity == null ? Gear.EMPTY : dev.vantage.game.GearReader.read(entity))
                     .bedIntact(state == null || state.isBedIntact())
                     .killsThisGame(count(killsThisGame, player.name))
                     .deathsThisGame(count(deathsThisGame, player.name))
-                    .self(self)
-                    .build());
+                    .flaggedForCheating(Flagged.is(player.name))
+                    .self(self);
+
+            // Out of render distance means their gear is unknown, not absent. Scoring it as none
+            // is what made good players read as harmless.
+            if (entity == null) {
+                builder.gearUnknown();
+            } else {
+                builder.gear(dev.vantage.game.GearReader.read(entity));
+            }
+            inputs.add(builder.build());
         }
 
         entries = ThreatEngine.rank(inputs, weights);

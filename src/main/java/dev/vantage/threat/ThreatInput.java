@@ -20,6 +20,8 @@ public final class ThreatInput {
     private final int deathsThisGame;
     private final boolean nicked;
     private final boolean self;
+    private final boolean gearObserved;
+    private final boolean flaggedForCheating;
 
     private ThreatInput(Builder builder) {
         this.name = builder.name;
@@ -32,6 +34,8 @@ public final class ThreatInput {
         this.deathsThisGame = builder.deathsThisGame;
         this.nicked = builder.nicked;
         this.self = builder.self;
+        this.gearObserved = builder.gearObserved;
+        this.flaggedForCheating = builder.flaggedForCheating;
     }
 
     public static Builder builder(String name) {
@@ -78,6 +82,21 @@ public final class ThreatInput {
         return self;
     }
 
+    /**
+     * Whether their gear could actually be seen.
+     *
+     * <p>False when the player is outside render distance, which in Bedwars is most of the lobby
+     * most of the time. Unknown gear is not the same as no gear, and treating it as none is what
+     * made good players score low.
+     */
+    public boolean isGearObserved() {
+        return gearObserved;
+    }
+
+    public boolean isFlaggedForCheating() {
+        return flaggedForCheating;
+    }
+
     public static final class Builder {
         private final String name;
         private String team = "";
@@ -89,6 +108,8 @@ public final class ThreatInput {
         private int deathsThisGame;
         private boolean nicked;
         private boolean self;
+        private boolean gearObserved;
+        private boolean flaggedForCheating;
 
         private Builder(String name) {
             this.name = name;
@@ -105,8 +126,22 @@ public final class ThreatInput {
             return this;
         }
 
+        /** Records gear that was actually read off a loaded entity. */
         public Builder gear(Gear gear) {
             this.gear = gear;
+            this.gearObserved = gear != null;
+            return this;
+        }
+
+        /** Marks their gear as unknown, so the factor drops out rather than scoring zero. */
+        public Builder gearUnknown() {
+            this.gear = Gear.EMPTY;
+            this.gearObserved = false;
+            return this;
+        }
+
+        public Builder flaggedForCheating(boolean flagged) {
+            this.flaggedForCheating = flagged;
             return this;
         }
 

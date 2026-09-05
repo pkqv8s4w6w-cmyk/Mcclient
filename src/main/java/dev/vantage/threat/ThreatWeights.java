@@ -3,13 +3,17 @@ package dev.vantage.threat;
 /**
  * How much each factor counts toward the final score.
  *
- * <p>Exposed as settings so the balance can be tuned in game. Values are relative, not required to
- * sum to anything; the engine normalises them, which also means it can drop a factor entirely when
- * the data is missing without the remaining score collapsing.
+ * <p>Values are relative rather than required to sum to anything: the engine normalises whichever
+ * factors it could actually observe, which is what lets it drop one entirely without the remaining
+ * score collapsing.
+ *
+ * <p>The momentum weight is retained for compatibility with saved profiles but no longer blended —
+ * bed state and current form are applied as a bounded modifier instead, so they adjust a score
+ * rather than dominating one.
  */
 public final class ThreatWeights {
 
-    public static final ThreatWeights DEFAULT = new ThreatWeights(0.45, 0.35, 0.20);
+    public static final ThreatWeights DEFAULT = new ThreatWeights(0.55, 0.30, 0.0);
 
     private final double stats;
     private final double gear;

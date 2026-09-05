@@ -31,7 +31,7 @@ public final class LobbyReader {
         public final String name;
         public final int ping;
 
-        LobbyPlayer(UUID uuid, String name, int ping) {
+        public LobbyPlayer(UUID uuid, String name, int ping) {
             this.uuid = uuid;
             this.name = name;
             this.ping = ping;
@@ -41,6 +41,14 @@ public final class LobbyReader {
     private LobbyReader() {
     }
 
+    /**
+     * Everyone taking part in the current game.
+     *
+     * <p>The raw tab list is not that. In a Bedwars lobby it carries every player standing around
+     * the hub, and minigame tab lists carry decorative entries too, which is why unrelated names
+     * were turning up in the threat list. Every participant in a Bedwars game is assigned to a
+     * scoreboard team, so that assignment is the filter.
+     */
     public static List<LobbyPlayer> readPlayers() {
         List<LobbyPlayer> players = new ArrayList<LobbyPlayer>();
         Minecraft mc = Minecraft.getMinecraft();
@@ -51,18 +59,55 @@ public final class LobbyReader {
         if (infoMap == null) {
             return players;
         }
+
+        Scoreboard scoreboard = mc.theWorld == null ? null : mc.theWorld.getScoreboard();
+        List<Boolean> onATeam = new ArrayList<Boolean>();
+
         for (NetworkPlayerInfo info : infoMap) {
             GameProfile profile = info.getGameProfile();
             if (profile == null || profile.getId() == null || profile.getName() == null) {
                 continue;
             }
-            // Minigame tab lists carry decorative entries alongside real players.
             if (!VALID_NAME.matcher(profile.getName()).matches()) {
                 continue;
             }
             players.add(new LobbyPlayer(profile.getId(), profile.getName(), info.getResponseTime()));
+            onATeam.add(scoreboard != null && scoreboard.getPlayersTeam(profile.getName()) != null);
         }
-        return players;
+        return keepParticipants(players, onATeam);
+    }
+
+    /**
+     * Drops entries with no team, but only when at least one entry has one.
+     *
+     * <p>Separated out and free of Minecraft types so the rule can be tested. The fallback matters:
+     * outside a team-based game nobody has a team, and filtering on it there would empty the list
+     * rather than leaving it alone.
+     *
+     * @param players   candidates, in tab list order
+     * @param onATeam   whether each has a scoreboard team, same length and order
+     */
+    public static List<LobbyPlayer> keepParticipants(List<LobbyPlayer> players, List<Boolean> onATeam) {
+        if (players.size() != onATeam.size()) {
+            throw new IllegalArgumentException("players and onATeam must line up");
+        }
+        boolean anyTeams = false;
+        for (Boolean flag : onATeam) {
+            if (Boolean.TRUE.equals(flag)) {
+                anyTeams = true;
+                break;
+            }
+        }
+        if (!anyTeams) {
+            return players;
+        }
+        List<LobbyPlayer> participants = new ArrayList<LobbyPlayer>(players.size());
+        for (int i = 0; i < players.size(); i++) {
+            if (Boolean.TRUE.equals(onATeam.get(i))) {
+                participants.add(players.get(i));
+            }
+        }
+        return participants;
     }
 
     /** The sidebar's lines, top to bottom, with their formatting intact. */

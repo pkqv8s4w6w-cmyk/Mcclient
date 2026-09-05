@@ -7,16 +7,16 @@ public final class ThreatEntry implements Comparable<ThreatEntry> {
     private final double score;
     private final double statsScore;
     private final double gearScore;
-    private final double momentumScore;
+    private final double modifier;
     private final boolean statsCounted;
 
     ThreatEntry(ThreatInput input, double score, double statsScore, double gearScore,
-                double momentumScore, boolean statsCounted) {
+                double modifier, boolean statsCounted) {
         this.input = input;
         this.score = score;
         this.statsScore = statsScore;
         this.gearScore = gearScore;
-        this.momentumScore = momentumScore;
+        this.modifier = modifier;
         this.statsCounted = statsCounted;
     }
 
@@ -45,8 +45,9 @@ public final class ThreatEntry implements Comparable<ThreatEntry> {
         return gearScore;
     }
 
-    public double getMomentumScore() {
-        return momentumScore;
+    /** The bed and current-form adjustment applied on top of the stats and gear blend. */
+    public double getModifier() {
+        return modifier;
     }
 
     /** False when the player's stats were unavailable and the score rests on gear alone. */
@@ -54,9 +55,19 @@ public final class ThreatEntry implements Comparable<ThreatEntry> {
         return statsCounted;
     }
 
+    public boolean isFlaggedForCheating() {
+        return input.isFlaggedForCheating();
+    }
+
     @Override
     public int compareTo(ThreatEntry other) {
-        // Highest score first; ties broken by name so the list does not shuffle between frames.
+        // Anyone caught cheating sorts above everyone, rather than relying on the score floor to
+        // out-argue a genuinely elite player in full diamond. It would, sometimes, and that is not
+        // a property worth depending on.
+        if (isFlaggedForCheating() != other.isFlaggedForCheating()) {
+            return isFlaggedForCheating() ? -1 : 1;
+        }
+        // Then highest score, with ties broken by name so the list does not shuffle each frame.
         int byScore = Double.compare(other.score, this.score);
         return byScore != 0 ? byScore : getName().compareToIgnoreCase(other.getName());
     }
