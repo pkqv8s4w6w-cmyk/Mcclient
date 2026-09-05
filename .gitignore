@@ -1,0 +1,28 @@
+# Build output
+build/
+out/
+classes/
+*.class
+
+# Gradle
+.gradle/
+!gradle/wrapper/gradle-wrapper.jar
+
+# Loom / Minecraft dev runtime
+run/
+.architectury-loom/
+remappedSrc/
+
+# IDE
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+.settings/
+.classpath
+.project
+
+# Secrets - the Hypixel API key lives here, never commit it
+api.json
+*.key
