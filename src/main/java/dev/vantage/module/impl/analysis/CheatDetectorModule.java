@@ -14,6 +14,7 @@ import dev.vantage.game.LobbyReader;
 import dev.vantage.game.TeamColour;
 import dev.vantage.module.Category;
 import dev.vantage.module.Module;
+import dev.vantage.net.PacketDelayer;
 import dev.vantage.net.PacketObserver;
 import dev.vantage.setting.BooleanSetting;
 import dev.vantage.setting.NumberSetting;
@@ -39,7 +40,9 @@ import java.util.Map;
  * gap are implemented. Rotations arrive quantised to a single byte per axis, about 1.4 degrees, so
  * the fine-grained mouse analysis a server-side anticheat runs is not possible here at all.
  * Backtrack is not detectable either — it is a property of the attacker's packet timing against the
- * server, which a third party never sees — so it is absent rather than faked.
+ * server, which a third party never sees — so there is no check for it rather than a faked one.
+ * (That this client now ships a Backtrack module of its own changes nothing here: watching someone
+ * else use one is still not something a client can do.)
  *
  * <p>Every verdict is a heuristic with a confidence attached, not an accusation. Thresholds scale
  * with the watched player's latency, which is the largest single source of wrong answers.
@@ -189,7 +192,12 @@ public class CheatDetectorModule extends Module {
 
         // A step this large is the server repositioning them, not the player moving. Marking it
         // lets every movement check discard the pair rather than reading it as impossible speed.
-        boolean teleported = travelled > 8.0;
+        //
+        // Backtrack distorts movement the same way from this end: a player whose packets are being
+        // held stalls and then catches up in one tick. Left unmarked, this client's own delaying
+        // would read as that player flying or speeding, and the detector would flag whoever the
+        // user is fighting. The same discard handles it, so no separate suppression is needed.
+        boolean teleported = travelled > 8.0 || PacketDelayer.instance().isDistorting(id);
 
         Vec3 look = player.getLook(1.0f);
         double lookLength = Math.sqrt(look.xCoord * look.xCoord + look.zCoord * look.zCoord);
