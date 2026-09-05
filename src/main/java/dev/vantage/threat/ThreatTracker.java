@@ -4,6 +4,7 @@ import dev.vantage.Vantage;
 import dev.vantage.detect.Flagged;
 import dev.vantage.game.DeathMessageParser;
 import dev.vantage.game.GameDetector;
+import dev.vantage.game.GearReader;
 import dev.vantage.game.LobbyReader;
 import dev.vantage.game.SidebarParser;
 import dev.vantage.game.TeamColour;
@@ -21,8 +22,10 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
@@ -33,16 +36,30 @@ import java.util.concurrent.ThreadFactory;
  * <p>Lookups run on a background thread and only ever write into the cache; the list itself is
  * rebuilt on the client thread from whatever the cache holds at that moment. Nothing waits on the
  * network, so a slow API response cannot stall a frame.
+ *
+ * <p>The roster is <b>sticky</b>. A player stays listed until they have been missing from several
+ * consecutive rebuilds, and their last known gear is remembered after they leave render distance.
+ * Rebuilding the list from scratch every time is what made rows appear and disappear: one bad read
+ * of the tab list, or one frame where the scoreboard was mid-update, used to empty the whole panel.
  */
 public final class ThreatTracker {
 
     /** Rebuild the list four times a second; more often just burns frames. */
     private static final int REBUILD_INTERVAL_TICKS = 5;
 
+    /**
+     * How long the list survives the scoreboard saying you are not in a game.
+     *
+     * <p>The sidebar is briefly absent or replaced at several points in a normal game. Blanking the
+     * panel the instant it changes is what made the list flicker.
+     */
+    private static final long GAME_GRACE_MILLIS = 4_000L;
+
     private final StatsCache cache = new StatsCache(RateLimiter.SYSTEM);
     private final HypixelApi api = HypixelApi.live();
     private final ExecutorService lookups;
 
+    private final Roster roster = new Roster();
     private final Map<String, Integer> killsThisGame = new HashMap<String, Integer>();
     private final Map<String, Integer> deathsThisGame = new HashMap<String, Integer>();
 
@@ -51,6 +68,7 @@ public final class ThreatTracker {
     private volatile ApiResult.Status lastFailure;
     private volatile boolean inGame;
 
+    private long lastInGameMillis;
     private int tickCounter;
 
     public ThreatTracker() {
@@ -115,16 +133,22 @@ public final class ThreatTracker {
     /** Drops per-game state. Called when the player joins a different world. */
     public void reset() {
         inGame = false;
+        lastInGameMillis = 0L;
+        roster.clear();
         killsThisGame.clear();
         deathsThisGame.clear();
         entries = Collections.emptyList();
     }
 
     public void onChatMessage(String raw) {
-        List<LobbyReader.LobbyPlayer> players = LobbyReader.readPlayers();
         Set<String> names = new HashSet<String>();
-        for (LobbyReader.LobbyPlayer player : players) {
-            names.add(player.name);
+        for (Roster.Member member : roster.members()) {
+            names.add(member.getName());
+        }
+        if (names.isEmpty()) {
+            for (LobbyReader.LobbyPlayer player : LobbyReader.readPlayers()) {
+                names.add(player.name);
+            }
         }
         DeathMessageParser.Kill kill = DeathMessageParser.parse(raw, names);
         if (kill == null) {
@@ -141,22 +165,32 @@ public final class ThreatTracker {
         counter.put(name, current == null ? 1 : current + 1);
     }
 
-    public void tick(ThreatWeights weights, boolean enemiesOnly) {
+    public void tick(boolean enemiesOnly) {
         if (++tickCounter < REBUILD_INTERVAL_TICKS) {
             return;
         }
         tickCounter = 0;
 
+        Minecraft mc = Minecraft.getMinecraft();
+        long now = System.currentTimeMillis();
+
         // The tab list alone is not a lobby. In a hub it carries everyone standing around, which
         // is how unrelated names ended up in the list; the scoreboard title is what says whether
         // there is a game to list at all. Inside one, the tab list is exactly the participants.
-        inGame = GameDetector.isBedwars(LobbyReader.readSidebarTitle());
-        if (!inGame) {
+        boolean titleSaysBedwars = GameDetector.isBedwars(LobbyReader.readSidebarTitle());
+        if (titleSaysBedwars) {
+            lastInGameMillis = now;
+        } else if (now - lastInGameMillis < GAME_GRACE_MILLIS) {
+            // Probably a momentary scoreboard change rather than the game ending. Hold what we have.
+            return;
+        } else {
+            inGame = false;
+            roster.clear();
             entries = Collections.emptyList();
             return;
         }
+        inGame = true;
 
-        Minecraft mc = Minecraft.getMinecraft();
         if (mc.thePlayer == null) {
             return;
         }
@@ -164,54 +198,73 @@ public final class ThreatTracker {
         List<LobbyReader.LobbyPlayer> players = LobbyReader.readPlayers();
         Map<String, TeamColour> teamOf = LobbyReader.readTeamAssignments(players);
         Map<String, TeamState> teamStates = SidebarParser.parse(LobbyReader.readSidebar());
-
         String selfName = mc.thePlayer.getName();
-        TeamColour ownTeam = teamOf.get(selfName);
 
-        List<ThreatInput> inputs = new ArrayList<ThreatInput>(players.size());
-        for (LobbyReader.LobbyPlayer player : players) {
-            boolean self = player.name.equals(selfName);
-            TeamColour team = teamOf.get(player.name);
-            if (team == null) {
-                team = TeamColour.UNKNOWN;
-            }
-            if (enemiesOnly && !self && ownTeam != null && ownTeam != TeamColour.UNKNOWN && team == ownTeam) {
+        roster.update(sightings(players, teamOf, selfName), now);
+
+        Roster.Member self = roster.get(selfName);
+        TeamColour ownTeam = self == null ? null : self.getTeam();
+
+        List<ThreatInput> inputs = new ArrayList<ThreatInput>(roster.size());
+        for (Roster.Member member : roster.members()) {
+            // Your own row always survives the filter: seeing where you sit is the point of it.
+            if (enemiesOnly && !member.isSelf() && ownTeam != null && ownTeam != TeamColour.UNKNOWN
+                    && member.getTeam() == ownTeam) {
                 continue;
             }
-
-            BedwarsStats stats = cache.get(player.uuid);
-            if (stats == null) {
-                stats = BedwarsStats.UNKNOWN;
-                requestStats(player.uuid);
-            }
-
-            TeamState state = teamStates.get(team.getDisplayName().toLowerCase(java.util.Locale.ROOT));
-            EntityPlayer entity = LobbyReader.findEntity(player.name);
-
-            ThreatInput.Builder builder = ThreatInput.builder(player.name)
-                    .team(team.getDisplayName(), team.getColourCode())
-                    .stats(stats)
-                    // Only call them nicked once a lookup actually came back empty; before that
-                    // the stats are merely not fetched yet.
-                    .nicked(stats.isUnknown() && !cache.needsFetch(player.uuid) && !cache.isFailed(player.uuid))
-                    .bedIntact(state == null || state.isBedIntact())
-                    .killsThisGame(count(killsThisGame, player.name))
-                    .deathsThisGame(count(deathsThisGame, player.name))
-                    .flaggedForCheating(Flagged.is(player.name))
-                    .self(self);
-
-            // Out of render distance means their gear is unknown, not absent. Scoring it as none
-            // is what made good players read as harmless.
-            if (entity == null) {
-                builder.gearUnknown();
-            } else {
-                builder.gear(dev.vantage.game.GearReader.read(entity));
-            }
-            inputs.add(builder.build());
+            inputs.add(buildInput(member, teamStates, now));
         }
 
-        entries = ThreatEngine.rank(inputs, weights);
+        entries = ThreatEngine.rank(inputs);
         cache.prune();
+    }
+
+    /** Turns this tick's view of the world into what the roster needs to fold in. */
+    private static List<Roster.Sighting> sightings(List<LobbyReader.LobbyPlayer> players,
+                                                   Map<String, TeamColour> teamOf, String selfName) {
+        List<Roster.Sighting> sightings = new ArrayList<Roster.Sighting>(players.size());
+        for (LobbyReader.LobbyPlayer player : players) {
+            // Null gear means out of render distance, which the roster reads as "unchanged" rather
+            // than "carrying nothing".
+            EntityPlayer entity = LobbyReader.findEntity(player.name);
+            sightings.add(new Roster.Sighting(player.uuid, player.name,
+                    player.name.equals(selfName), teamOf.get(player.name),
+                    entity == null ? null : GearReader.read(entity)));
+        }
+        return sightings;
+    }
+
+    private ThreatInput buildInput(Roster.Member member, Map<String, TeamState> teamStates, long now) {
+        BedwarsStats stats = cache.get(member.getUuid());
+        if (stats == null) {
+            stats = BedwarsStats.UNKNOWN;
+            requestStats(member.getUuid());
+        }
+
+        TeamColour team = member.getTeam();
+        TeamState state = teamStates.get(team.getDisplayName().toLowerCase(Locale.ROOT));
+
+        ThreatInput.Builder builder = ThreatInput.builder(member.getName())
+                .team(team.getDisplayName(), team.getColourCode())
+                .stats(stats)
+                // Only call them nicked once a lookup actually came back empty; before that the
+                // stats are merely not fetched yet.
+                .nicked(stats.isUnknown() && !cache.needsFetch(member.getUuid())
+                        && !cache.isFailed(member.getUuid()))
+                .bedIntact(state == null || state.isBedIntact())
+                .killsThisGame(count(killsThisGame, member.getName()))
+                .deathsThisGame(count(deathsThisGame, member.getName()))
+                .flaggedForCheating(Flagged.is(member.getName()))
+                .self(member.isSelf());
+
+        if (member.getGear() == null) {
+            builder.gearUnknown();
+        } else {
+            // Held rather than dropped: their gear is unknown once they walk off, not absent, and
+            // scoring it as absent is what made a rating fall a point for rounding a corner.
+            builder.gear(member.getGear(), member.gearAgeMillis(now));
+        }
+        return builder.build();
     }
 
     private static int count(Map<String, Integer> counter, String name) {
@@ -219,7 +272,7 @@ public final class ThreatTracker {
         return value == null ? 0 : value;
     }
 
-    private void requestStats(final java.util.UUID uuid) {
+    private void requestStats(final UUID uuid) {
         if (apiKey.isEmpty() || !cache.claim(uuid)) {
             return;
         }

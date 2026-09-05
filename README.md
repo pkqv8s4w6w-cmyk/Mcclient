@@ -13,8 +13,8 @@ servers.
 
 | Module | What it does |
 |---|---|
-| Threat List | Ranks everyone in your game 0–10, most dangerous at the top, with their team colour, final kill ratio, star and current gear |
-| Cheat Detector | Nine checks across combat, movement and building. Names the team and player in chat, and flagged players go to the top of the threat list |
+| Threat List | Ranks everyone in your game 0–10 on their stats and gear, most dangerous at the top, with their team colour, FKDR, win/loss, star and current gear. You are in the list too, highlighted, so you can see who you can take |
+| Cheat Detector | Reach, backtrack, aim assist, autoclickers, anti-knockback and automated bridging. Names the team and player in chat, and flagged players go to the top of the threat list |
 
 **HUD** — Keystrokes, CPS, Info (fps / ping / coordinates / facing), Armour, Potions.
 All draggable, with alignment snapping and scroll-to-resize.
@@ -72,28 +72,50 @@ not show on a stream or a screenshot.
 
 ## How the threat score works
 
-The scale is anchored at both ends. **0** is essentially their first game and you win that fight
-almost every time; **10** is ranked tier, a very high final kill ratio, and you very likely lose.
+The whole score is their public record plus what they are carrying, and nothing else. The scale is
+anchored at both ends: **0** is essentially their first game and you win that fight almost every
+time; **10** is a leaderboard name and you very likely lose.
 
-- **Stats lead, at 55%.** Final kill/death ratio and Bedwars level, log-scaled, with FKDR
-  outweighing star four to one — star is mostly time played, FKDR is skill. The gap between 2 and 6
-  FKDR matters far more than the gap between 20 and 40, which is why it is not linear. Records too
-  thin to judge are pulled toward the bottom of the scale rather than the middle.
-- **Gear at 30%, but only when it can be seen.** Outside render distance gear is *unknown*, not
-  absent, and the factor drops out so stats carry the score. Treating unknown as none is what made
-  good players read as harmless.
-- **Bed and current form are small adjustments**, not co-equal terms: an intact bed is worth +0.3,
-  kills this game up to +1.2. As blended factors they dragged an excellent player with an untouched
-  bed and no kills yet down to about 8.5, which is backwards.
+```
+skill = 0.55 × FKDR + 0.25 × win/loss + 0.20 × KDR      (each log-scaled to 0–10)
+score = skill + star bonus (≤ +1) + gear (±1.2)
+```
+
+- **FKDR leads.** It is the closest thing Bedwars has to a direct measure of who wins a fight.
+- **Win/loss counts next**, because it is hard to farm and says whether they close games out.
+- **KDR counts least** — it mixes in void deaths and non-final kills, so it is the noisiest.
+- Each is log-scaled. The gap between 2 and 6 FKDR matters far more than the gap between 20 and 40,
+  and on a linear scale nearly every real player would be squashed into the bottom of the range.
+- **Star is a bounded bonus, not a fourth ratio.** Level is mostly time played, so a grinder with a
+  mediocre record cannot out-rank a good player however many stars they have.
+- **Gear is a bounded adjustment, never a weight.** Weighting it heavily was what made everybody
+  score alike — by mid-game the whole lobby owns iron or diamond, so gear converges and drowns the
+  skill signal. The last reading is also held for a while after a player leaves render distance and
+  then fades, so a rating settles instead of dropping a point when somebody rounds a corner.
+- **Records too thin to judge** are pulled toward the middle and marked with a hollow dot: five
+  final kills is not a 10 FKDR player, it is five fights.
+- **A nicked player scores 7.** A nick hides a record, and the players who bother are far more often
+  good ones avoiding attention than beginners.
 - **A confirmed cheat flag floors the score at 9.5** and sorts that player above everyone.
 
-Six realistic player profiles are asserted as score bands in the test suite, so the calibration is
-checked on every build rather than discovered in a game.
+Bed state and this game's kills are shown but not scored. They used to move every player's number
+every few seconds off the kill feed without ever making it more accurate.
+
+**You are in the list too**, in your real position with your row highlighted, so the players above
+you are the ones you lose to and the players below are the ones you do not. Your row keeps its place
+even when the list is capped shorter than your rank.
+
+Six realistic player profiles are asserted as score bands in the test suite, along with the
+properties that broke before — that gear cannot swing a score by more than about a point, that an
+ageing gear reading fades rather than steps, and that bed state and current kills move it by exactly
+zero — so the calibration is checked on every build rather than discovered in a game.
 
 The list only appears when you are actually in a Bedwars game or its pre-game lobby, decided from
-the scoreboard title. A tab list on its own is not a lobby: in a hub it carries everyone standing
-around, which is how unrelated names ended up in the list. Inside a game the tab list is exactly the
-participants, so nothing further needs filtering.
+the scoreboard title, and it survives the scoreboard briefly changing rather than blanking. The
+roster is **sticky**: a player has to be missing from several consecutive rebuilds before they are
+dropped, so one bad read of the tab list cannot make rows appear and disappear. NPCs and shopkeepers
+are filtered out by UUID version — Mojang issues version 4 for real accounts, while a server
+inventing a profile derives it from a name and stamps version 3.
 
 **Detail** controls how much of each player is shown — score and name, plus their stats, or the full
 row with team and gear. Names carry their team's colour throughout.
@@ -108,33 +130,53 @@ anticheat performs, such as finding the common divisor of raw rotation deltas, n
 unquantised floats that only the server receives. That signal is not available client-side at all,
 and a check built on it would be measuring rounding noise.
 
-Nine checks are implemented, grouped into three toggles:
+Only the cheats people actually run are looked for, grouped into three toggles:
 
-**Combat** — *Autoclicker*: the tell is not a high rate, since people reach sixteen clicks a second
-by hand and that is legitimate. What a hand cannot do is be consistent, so this measures the spread
-of the gaps. Timing comes off the network pipeline, not entity state, which only updates once a tick.
-*Aim assist*: large single-tick turns that land on a target, and a view that stays locked on one
-through movement that should have disturbed it. *Reach*: measured only for hits landed on **you** —
-for an attack between two other players the client sees neither the attack nor the positions the
-server used. *Anti-knockback*: displacement after a hit, taken as a median, since being hit into a
-wall legitimately moves you almost nowhere.
-
-**Movement** — *Speed*, judged on the median tick rather than the fastest, because one long tick is
-a rubber-band. *Flight*, from runs of airborne ticks with no descent. *Jump height*, deliberately
-conservative since the client cannot see another player's potion effects. *Backwards sprinting*,
-which is impossible in vanilla 1.8 and so has almost no false-positive surface.
+**Combat** — *Reach*: measured only for hits landed on **you**, and judged against **where you were**
+rather than where you are. A server rewinds the world to compensate for latency before deciding
+whether a hit lands, so asking the instantaneous distance asks a question the server never asked and
+reads long for everybody. *Backtrack*: a hit that was legal a moment ago but is not now. That alone
+is also what an honest bad connection looks like, so the tell is **consistency** — real latency
+wanders, while a backtrack module holds packets for a set time and puts every hit at nearly the same
+delay. *Aim assist*: every implementation has a cone it engages inside and a cap on how fast it may
+turn, which leaves three marks — it does not overshoot, it turns at one speed, and it never loses the
+target. Two of the three have to agree. *Autoclicker*: the tell is not a high rate, since people
+reach sixteen clicks a second by hand. What a hand cannot do is be consistent, so this measures the
+spread of the gaps across the middle of the sample — and counts the pauses at the edges, because a
+person stops now and then and a timer never does. *Anti-knockback*: displacement after a hit, taken
+as a median, since being hit into a wall legitimately moves you almost nowhere.
 
 **Scaffold** — placing blocks under yourself while walking backwards is how everyone crosses a gap,
 so rate alone would flag the whole lobby. The difference is where the player looks: bridging by hand
 means aiming down at the block, while a scaffold keeps the view level and forward because the
-placement is not coming from the view at all.
+placement is not coming from the view at all. A block is only attributed when it sits where a bridge
+block would sit and exactly one person was close enough to have placed it; batched block changes of
+more than two are ignored outright, since those are explosions and bed breaks rather than building.
 
-Every movement check discards any pair of samples where either end was teleported. Positions arrive
-quantised to 1/32 of a block and a server reposition resets them, so differencing across one reads
-as impossible speed — the largest source of false positives in movement detection, ahead of latency.
+**Backwards sprint** (off by default) — impossible in vanilla 1.8, and unlike the checks below it
+does not depend on the positions being accurate, only on which way somebody is travelling relative
+to their own facing.
 
-**Backtrack is not detectable from a client** and is not implemented. It is a property of the
-attacker's packet timing against the server, which a third-party client never sees.
+### What was removed, and why
+
+*Flight*, *speed* and *jump height* are gone. A client does not see another player's real position:
+positions arrive quantised to 1/32 of a block at whatever rate the server sends them, and the game
+then **interpolates** the entity between the last two. When packets come sparsely — normal for a
+player standing still, far away, or whose updates got batched — the interpolated height simply holds,
+and a check counting airborne ticks without descent counts up. The old flight check would report a
+player standing on a block as flying. No threshold fixes that, because the input is not a measurement
+of what it claims to measure. Flight has also not survived a server-side anticheat in years, so the
+check had nothing to find.
+
+### Three rules that keep it from accusing the innocent
+
+1. **Nothing is collected outside a fight.** Mining wool produces a perfectly steady stream of swing
+   packets; walking past somebody involves turning to look at them. Neither is evidence.
+2. **Evidence is spent when it is judged.** The windows used to be re-read every second without ever
+   being cleared, so one odd stretch of play was counted again and again until it crossed the
+   threshold on its own. Nobody had to do anything twice to be accused of it.
+3. **No single check convicts.** Two different checks have to agree, or one has to hold up across
+   several separate windows of evidence.
 
 Thresholds scale with the watched player's latency, which is the largest single source of wrong
 answers. Every verdict carries a confidence and is a heuristic, not an accusation.
@@ -171,11 +213,16 @@ never stop the game starting.
 ./gradlew test
 ```
 
-194 tests cover the parts that do not need a running game: threat scoring, Hypixel response parsing,
+256 tests cover the parts that do not need a running game: threat scoring, Hypixel response parsing,
 rate limiting and caching, scoreboard and death-message parsing, HUD snapping, config round-trips,
-and the detection heuristics — including sequences built to look human and to look automated, a
-check that packet quantisation alone never reads as cheating, and six player profiles asserted as
-threat score bands.
+and the detection heuristics.
+
+The detection tests are built around the failure that matters. Every check has a fixture of
+*legitimate* play that must not flag — a butterfly clicker at fourteen a second, somebody aiming by
+hand across eight seeds, a player on a genuinely bad connection whose hits land looking long, an
+ordinary Bedwars bridge — alongside the automated fixtures it has to catch. Every rotation fixture is
+put through the same 1.4° packet quantisation the client really sees, because a check that only works
+on clean numbers does not work at all.
 
 Anything Minecraft-facing has to be checked in game. `Module`, `Setting`, `ConfigManager`, the
 threat engine, the detection analyses and the Hypixel client deliberately import nothing from
@@ -220,3 +267,7 @@ The interface cannot be verified without running the game. Worth an eye on first
       rather than rendering black
 - [ ] HUD editor snaps elements to edges and to each other, with guide lines
 - [ ] Threat list columns stay aligned as names and numbers change
+- [ ] Your own row is in the list, highlighted, at the rank the score puts you
+- [ ] Ratings hold steady as players walk in and out of render distance
+- [ ] No shopkeepers or NPCs in the list, and nobody vanishes from it mid-game
+- [ ] A full game of ordinary play flags nobody

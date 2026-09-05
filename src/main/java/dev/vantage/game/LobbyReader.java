@@ -15,15 +15,12 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import java.util.regex.Pattern;
 
 /** Pulls the current lobby out of the game: who is here, what team they are on, and their gear. */
 public final class LobbyReader {
 
     /** Display slot 1 is the sidebar. */
     private static final int SIDEBAR_SLOT = 1;
-
-    private static final Pattern VALID_NAME = Pattern.compile("[A-Za-z0-9_]{1,16}");
 
     /** One tab list entry, reduced to what the threat list needs. */
     public static final class LobbyPlayer {
@@ -58,13 +55,15 @@ public final class LobbyReader {
         if (infoMap == null) {
             return players;
         }
+        UUID own = mc.thePlayer == null ? null : mc.thePlayer.getGameProfile().getId();
         for (NetworkPlayerInfo info : infoMap) {
             GameProfile profile = info.getGameProfile();
             if (profile == null || profile.getId() == null || profile.getName() == null) {
                 continue;
             }
-            // Minigame tab lists carry decorative entries alongside real players.
-            if (!VALID_NAME.matcher(profile.getName()).matches()) {
+            // Never filter yourself out, whatever your profile looks like.
+            if (!profile.getId().equals(own)
+                    && !PlayerIdentity.isRealAccount(profile.getId(), profile.getName())) {
                 continue;
             }
             players.add(new LobbyPlayer(profile.getId(), profile.getName(), info.getResponseTime()));

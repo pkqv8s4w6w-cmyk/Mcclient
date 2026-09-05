@@ -1,25 +1,32 @@
 package dev.vantage.detect;
 
-import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 
 /**
- * Movement checks that run off per-tick position samples.
+ * The one movement check a client can honestly run on somebody else.
  *
- * <p>All of them ignore any pair of samples where either end was teleported, and none of them
- * judges on a single tick. A lag spike, a server-side reposition, or one dropped packet will each
- * produce a reading that looks impossible; only sustained behaviour means anything.
+ * <p>There used to be four here: speed, flight, jump height and this. The other three are gone, and
+ * the reason is worth writing down so nobody adds them back.
+ *
+ * <p>A client does not see another player's real position. Positions arrive quantised to a
+ * thirty-second of a block, at whatever rate the server sends them, and the game then
+ * <em>interpolates</em> the entity between the last two over the following ticks. Reading
+ * {@code posY} on a client tick gives a smoothed, lagged guess, not a measurement. When the packets
+ * come sparsely — which is normal for a player who is standing still, or far away, or whose
+ * updates got batched — the interpolated height simply holds steady, and a check counting
+ * "airborne ticks without descending" counts up. The {@code onGround} flag is no better: for a
+ * remote player it is whatever the last packet claimed, and it goes stale the same way.
+ *
+ * <p>So the old flight check would report a player standing on a block as flying. That is the bug
+ * behind the whole lobby being accused, and no threshold fixes it, because the input is not a
+ * measurement of what it claims to measure. Speed and jump height rest on differencing those same
+ * positions and are unsound for the same reason. On top of that, flight has not survived a
+ * server-side anticheat in years, so nobody is running it and the check had nothing to find.
+ *
+ * <p>What is left does not depend on the positions being accurate — only on a flag the server
+ * itself sets, contradicting a direction of travel too large to be rounding.
  */
 public final class MovementAnalysis {
-
-    /** Sprint-jumping peaks near this for a tick or two, so a sustained median above it is odd. */
-    public static final double SPRINT_JUMP_PEAK = 0.58;
-
-    /** A vanilla jump reaches about this height. */
-    public static final double VANILLA_JUMP_HEIGHT = 1.2519;
-
-    private static final int MIN_SAMPLES = 20;
 
     public static final class Result {
         private final double measured;
@@ -46,6 +53,8 @@ public final class MovementAnalysis {
 
     public static final Result NOTHING = new Result(0.0, 0.0);
 
+    private static final int MIN_SAMPLES = 20;
+
     private MovementAnalysis() {
     }
 
@@ -57,105 +66,16 @@ public final class MovementAnalysis {
     }
 
     /**
-     * Horizontal speed, judged on the median tick rather than the fastest.
-     *
-     * <p>The median is the point: one 0.9 block tick is a lag correction, a median of 0.9 is not
-     * something a player can produce.
-     *
-     * @param allowed the fastest sustainable speed to accept, in blocks per tick
-     */
-    public static Result speed(List<MovementSample> samples, double allowed) {
-        if (samples == null || samples.size() < MIN_SAMPLES) {
-            return NOTHING;
-        }
-        List<Double> steps = new ArrayList<Double>();
-        for (int i = 1; i < samples.size(); i++) {
-            MovementSample previous = samples.get(i - 1);
-            MovementSample current = samples.get(i);
-            if (previous.teleported || current.teleported) {
-                continue;
-            }
-            steps.add(previous.horizontalDistanceTo(current));
-        }
-        if (steps.size() < MIN_SAMPLES / 2) {
-            return NOTHING;
-        }
-        Collections.sort(steps);
-        double median = steps.get(steps.size() / 2);
-        return new Result(median, confidenceFor(median, allowed, allowed * 1.6));
-    }
-
-    /**
-     * The longest run of airborne ticks during which they never descended.
-     *
-     * <p>In vanilla you begin falling within a few ticks of leaving the ground, so a long run of
-     * airborne ticks with no downward movement is flight or a hover.
-     *
-     * <p>Cannot tell a ladder, water, a boat or a slime bounce apart from flight, which is why the
-     * default run length is deliberately long.
-     *
-     * @param allowedTicks how many non-descending airborne ticks to tolerate
-     */
-    public static Result hover(List<MovementSample> samples, int allowedTicks) {
-        if (samples == null || samples.size() < MIN_SAMPLES) {
-            return NOTHING;
-        }
-        int longest = 0;
-        int run = 0;
-        for (int i = 1; i < samples.size(); i++) {
-            MovementSample previous = samples.get(i - 1);
-            MovementSample current = samples.get(i);
-            if (previous.teleported || current.teleported || current.onGround) {
-                run = 0;
-                continue;
-            }
-            // A tiny negative tolerance, since positions arrive quantised to 1/32 of a block.
-            if (current.y - previous.y >= -0.03) {
-                run++;
-                longest = Math.max(longest, run);
-            } else {
-                run = 0;
-            }
-        }
-        return new Result(longest, confidenceFor(longest, allowedTicks, allowedTicks * 2.0));
-    }
-
-    /**
-     * The highest a player rose above the ground they left.
-     *
-     * <p>Kept conservative on purpose. Jump boost is real and the client cannot reliably see
-     * another player's effects, so the allowance sits above what a boosted jump reaches rather than
-     * flagging everyone who drank a potion.
-     */
-    public static Result jumpHeight(List<MovementSample> samples, double allowed) {
-        if (samples == null || samples.size() < MIN_SAMPLES) {
-            return NOTHING;
-        }
-        double best = 0.0;
-        Double groundLevel = null;
-        for (int i = 0; i < samples.size(); i++) {
-            MovementSample sample = samples.get(i);
-            if (sample.teleported) {
-                groundLevel = null;
-                continue;
-            }
-            if (sample.onGround) {
-                groundLevel = sample.y;
-                continue;
-            }
-            if (groundLevel != null) {
-                best = Math.max(best, sample.y - groundLevel);
-            }
-        }
-        return new Result(best, confidenceFor(best, allowed, allowed + 1.0));
-    }
-
-    /**
      * Sprinting while moving backwards.
      *
-     * <p>Not possible in vanilla 1.8, which makes this one of the few checks with almost no
-     * false-positive surface. Knockback can briefly push someone backwards with the sprint flag
-     * still set, so it takes a sustained run rather than one tick.
+     * <p>Not possible in vanilla 1.8: the game clears the sprint flag the moment you stop pressing
+     * forward. So this is one of the few checks with almost no false-positive surface, and unlike
+     * the ones that were removed it does not care whether the positions are precise — only which
+     * way the player is travelling relative to their own facing, which survives both quantisation
+     * and interpolation.
+     *
+     * <p>Knockback can briefly push someone backwards with the flag still set, so it takes a
+     * sustained run rather than one tick.
      *
      * @param allowedTicks consecutive backwards-sprinting ticks to tolerate
      */

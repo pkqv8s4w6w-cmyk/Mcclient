@@ -2,75 +2,97 @@ package dev.vantage.detect;
 
 import org.junit.jupiter.api.Test;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Random;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ReachAnalysisTest {
 
-    /** A player-sized box centred on the origin's x/z, standing on y = 0. */
-    private static double distanceFrom(double x, double y, double z) {
-        return ReachAnalysis.distanceToBox(x, y, z, -0.3, 0.0, -0.3, 0.3, 1.8, 0.3);
+    private static final double ALLOWED = ReachAnalysis.DEFAULT_ALLOWED_REACH;
+
+    /**
+     * Hits that were legal against where you were, whatever they measured on arrival.
+     *
+     * @param arrivedAt how far away they looked when the damage landed
+     * @param rewoundTo how far away they were at the closest recent moment
+     */
+    private static List<HitSample> hits(int count, double arrivedAt, double rewoundTo,
+                                        int ticksAgo, long seed) {
+        Random random = new Random(seed);
+        List<HitSample> samples = new ArrayList<HitSample>();
+        for (int i = 0; i < count; i++) {
+            double jitter = (random.nextDouble() * 2.0 - 1.0) * 0.15;
+            samples.add(new HitSample(arrivedAt + jitter, rewoundTo + jitter, ticksAgo));
+        }
+        return samples;
+    }
+
+    // -- the failure that matters -------------------------------------------------------------
+
+    @Test
+    void ordinaryMeleeIsNotFlagged() {
+        assertFalse(ReachAnalysis.analyse(hits(12, 2.8, 2.6, 1, 1), ALLOWED).isSuspicious());
     }
 
     @Test
-    void measuresToTheNearestFaceNotTheCentre() {
-        // Four blocks along x from the centre is 3.7 from the box's face. Measuring to the centre
-        // would read every honest hit about half a block long.
-        assertEquals(3.7, distanceFrom(4.0, 1.0, 0.0), 1e-9);
+    void aLaggyHonestPlayerIsNotFlagged() {
+        // This is the whole point of rewinding. Their hits arrive looking four metres long,
+        // because you have moved since; against where you actually were they are ordinary. The
+        // old check measured only the first number and convicted anybody with a connection.
+        List<HitSample> laggy = hits(12, 4.2, 2.7, 6, 2);
+        assertFalse(ReachAnalysis.analyse(laggy, ALLOWED).isSuspicious(),
+                "a hit that was legal a moment ago is not reach");
     }
 
     @Test
-    void aPointInsideTheBoxIsZeroAway() {
-        assertEquals(0.0, distanceFrom(0.0, 1.0, 0.0), 1e-9);
+    void oneLongReadingDoesNotConvict() {
+        List<HitSample> samples = hits(12, 2.8, 2.7, 1, 3);
+        samples.set(5, new HitSample(6.0, 6.0, 0));
+        assertFalse(ReachAnalysis.analyse(samples, ALLOWED).isSuspicious(),
+                "the median exists so one spike cannot decide");
+    }
+
+    // -- what it should catch -----------------------------------------------------------------
+
+    @Test
+    void hitsThatWereNeverLegalFromAnywhereAreFlagged() {
+        ReachAnalysis.Result result = ReachAnalysis.analyse(hits(12, 4.1, 4.0, 0, 4), ALLOWED);
+        assertTrue(result.isSuspicious(), "median was " + result.getMedian());
     }
 
     @Test
-    void diagonalDistancesCombineEveryAxis() {
-        double expected = Math.sqrt(0.7 * 0.7 + 0.7 * 0.7);
-        assertEquals(expected, distanceFrom(1.0, 1.0, 1.0), 1e-9);
+    void theFurtherPastTheAllowanceTheMoreCertain() {
+        double modest = ReachAnalysis.analyse(hits(12, 3.7, 3.7, 0, 5), ALLOWED).getConfidence();
+        double blatant = ReachAnalysis.analyse(hits(12, 4.5, 4.5, 0, 6), ALLOWED).getConfidence();
+        assertTrue(blatant > modest);
+        assertEquals(1.0, blatant, 1e-9, "a metre past the allowance is as sure as it gets");
+    }
+
+    // -- edges --------------------------------------------------------------------------------
+
+    @Test
+    void aHandfulOfHitsSaysNothing() {
+        // Was five, which is a couple of seconds of one fight — and catching somebody at the edge
+        // of their range twice while you both strafe is not a pattern.
+        assertFalse(ReachAnalysis.analyse(hits(5, 5.0, 5.0, 0, 7), ALLOWED).isSuspicious());
     }
 
     @Test
-    void heightAboveTheBoxCounts() {
-        assertEquals(0.2, distanceFrom(0.0, 2.0, 0.0), 1e-9);
+    void malformedInputIsSafe() {
+        assertFalse(ReachAnalysis.analyse((List<HitSample>) null, ALLOWED).isSuspicious());
+        assertFalse(ReachAnalysis.analyse((double[]) null, ALLOWED).isSuspicious());
+        assertFalse(ReachAnalysis.analyse(new double[0], ALLOWED).isSuspicious());
     }
 
     @Test
-    void ordinaryHitsAreNotFlagged() {
-        double[] normal = {2.6, 2.9, 3.0, 2.7, 3.1, 2.8, 3.05};
-        assertFalse(ReachAnalysis.analyse(normal, 3.4).isSuspicious());
-    }
-
-    @Test
-    void oneLongReadingFromLagIsNotEnough() {
-        // A single spike must not convict; the median ignores it.
-        double[] mostlyNormal = {2.8, 2.9, 3.0, 6.2, 2.7, 2.9, 3.0};
-        ReachAnalysis.Result result = ReachAnalysis.analyse(mostlyNormal, 3.4);
-        assertFalse(result.isSuspicious());
-        assertEquals(6.2, result.getWorst(), 1e-9);
-    }
-
-    @Test
-    void aConsistentlyLongReachIsFlagged() {
-        double[] extended = {3.7, 3.8, 3.9, 3.75, 3.85, 3.95, 3.8};
-        ReachAnalysis.Result result = ReachAnalysis.analyse(extended, 3.4);
-        assertTrue(result.isSuspicious());
-        assertTrue(result.getMedian() > 3.7);
-    }
-
-    @Test
-    void tooFewHitsYieldNoVerdict() {
-        assertFalse(ReachAnalysis.analyse(new double[]{4.0, 4.0}, 3.4).isSuspicious());
-        assertFalse(ReachAnalysis.analyse(null, 3.4).isSuspicious());
-    }
-
-    @Test
-    void theAllowanceSitsAboveVanillaToAbsorbLagCompensation() {
-        double[] slightlyLong = {3.2, 3.25, 3.3, 3.2, 3.15, 3.3, 3.2};
-        assertTrue(ReachAnalysis.analyse(slightlyLong, ReachAnalysis.VANILLA_REACH).isSuspicious(),
-                "measured against bare vanilla reach this looks illegal");
-        assertFalse(ReachAnalysis.analyse(slightlyLong, 3.4).isSuspicious(),
-                "with a realistic allowance it is an ordinary rewound hit");
+    void theAllowanceSitsAboveVanillaRange() {
+        // Even after rewinding, a client's copy of somebody else's position is quantised and a
+        // tick behind, so a legitimate hit at the edge of range measures a little long here.
+        assertTrue(ALLOWED > ReachAnalysis.VANILLA_REACH);
+        assertTrue(ALLOWED < ReachAnalysis.VANILLA_REACH + 1.0, "but not so far as to be useless");
     }
 }

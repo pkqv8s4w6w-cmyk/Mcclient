@@ -43,6 +43,14 @@ public final class PacketObserver extends ChannelInboundHandlerAdapter {
     /** Enough for a busy few ticks; older entries are dropped rather than growing without bound. */
     private static final int PLACEMENT_QUEUE_LIMIT = 256;
 
+    /**
+     * Blocks in one batched change packet above which it is not somebody building.
+     *
+     * <p>Two, because a player placing a block can legitimately produce a second change alongside
+     * it — a block updating its own state, say — but nothing a person does by hand fills a batch.
+     */
+    private static final int MAX_BATCHED_PLACEMENTS = 2;
+
     /** A block that just appeared, and when. */
     public static final class Placement {
         public final BlockPos position;
@@ -151,8 +159,21 @@ public final class PacketObserver extends ChannelInboundHandlerAdapter {
         }
     }
 
+    /**
+     * A batch of block changes in one packet.
+     *
+     * <p>Batches are only forwarded when they are small. A player placing blocks produces one or
+     * two changes at a time; a batch of a dozen is an explosion, a bed breaking, or the server
+     * rewriting part of a chunk. Feeding those into placement attribution meant every TNT in the
+     * game handed thirty "placements" to whoever happened to be standing nearby, which is most of
+     * why the scaffold check accused people who were simply near a fight.
+     */
     private void readMultiBlockChange(S22PacketMultiBlockChange packet) {
-        for (S22PacketMultiBlockChange.BlockUpdateData update : packet.getChangedBlocks()) {
+        S22PacketMultiBlockChange.BlockUpdateData[] updates = packet.getChangedBlocks();
+        if (updates == null || updates.length > MAX_BATCHED_PLACEMENTS) {
+            return;
+        }
+        for (S22PacketMultiBlockChange.BlockUpdateData update : updates) {
             if (update.getBlockState() != null && update.getBlockState().getBlock() != Blocks.air) {
                 offer(update.getPos());
             }
