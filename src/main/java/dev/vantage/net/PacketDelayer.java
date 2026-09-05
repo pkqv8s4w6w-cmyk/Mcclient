@@ -13,6 +13,7 @@ import net.minecraftforge.fml.relauncher.ReflectionHelper;
 
 import java.lang.reflect.Field;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -20,7 +21,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Holds another player's movement packets back for a set time before handing them to the game.
+ * Blocks another player's movement packets outright for a window, pinning them where they were.
  *
  * <p>A second Netty handler alongside {@link PacketObserver}, installed the same way and for the
  * same reason - no bytecode patching, and a reconnect is recovered from by re-attaching rather than
@@ -28,19 +29,28 @@ import java.util.concurrent.TimeUnit;
  * end up in does not matter here: the three packet types the observer reads are never among the
  * ones held, so they reach it at the same moment either way.
  *
- * <p>Only three packet types are ever held, and only for entities the caller has explicitly listed:
+ * <p><b>Held, not slowed.</b> Everything for an engaged target is withheld until their window
+ * closes, then delivered in one catch-up burst. A running delay would only ever leave a target
+ * trailing by a fixed time, which is worth about a block at sprint speed; pinning them in place
+ * keeps them inside reach for as long as the window lasts, which is the point. It also means
+ * distance can never be what ends a window - a pinned player's distance stops changing - so
+ * {@link HoldWindow} ends it on a clock.
+ *
+ * <p>Each target gets its own queue. 1.8.9 movement is relative, so order matters within one
+ * player's stream and not at all between two, and a shared queue would make one target's deadline
+ * drag on another's.
+ *
+ * <p>Only three packet types are ever held, and only for entities the caller has listed:
  * {@code S14PacketEntity} and its relative-move subclasses, {@code S18PacketEntityTeleport}, and
- * {@code S19PacketEntityHeadLook}. Everything else on the connection is passed straight through,
- * untouched and unqueued.
+ * {@code S19PacketEntityHeadLook}. Everything else passes straight through, untouched and unqueued.
  *
- * <p><b>Nothing addressed to the local player is ever held.</b> That is checked here against the
- * player's own entity id rather than left to whoever builds the target set, because it is the one
- * property that must not depend on a caller getting something right: delaying your own velocity
- * packets delays your own knockback, which is both the most obvious tell there is and the thing
- * server-side anticheats actually punish.
+ * <p><b>Nothing addressed to the local player is ever held.</b> Checked here against the player's
+ * own entity id rather than left to whoever builds the target list, because it is the one property
+ * that must not depend on a caller getting something right. Other clients block all inbound traffic
+ * and so delay their own knockback, which is what their "disable on hit" setting exists to paper
+ * over; holding three packet types for named entities cannot do that in the first place.
  *
- * <p>Queue work happens on the channel's event loop. {@link HeldPacketQueue} holds the ordering
- * rules and is tested on its own.
+ * <p>All queue and window work happens on the channel's event loop.
  */
 public final class PacketDelayer extends ChannelInboundHandlerAdapter {
 
@@ -49,6 +59,9 @@ public final class PacketDelayer extends ChannelInboundHandlerAdapter {
 
     /** Returned when a packet is not one of the delayable kinds, or its id could not be read. */
     private static final int NO_ENTITY = Integer.MIN_VALUE;
+
+    /** Generous for one player's movement over a window; overflow releases rather than drops. */
+    private static final int PER_TARGET_CAPACITY = 256;
 
     /** How long after the last hold an entity still counts as distorted. See {@link #isDistorting}. */
     private static final long MINIMUM_DISTORTION_GRACE_MILLIS = 1000L;
@@ -66,13 +79,18 @@ public final class PacketDelayer extends ChannelInboundHandlerAdapter {
 
     private static PacketDelayer installed;
 
-    private final HeldPacketQueue queue = new HeldPacketQueue();
+    /** One queue per target. Event loop only. */
+    private final Map<Integer, HeldPacketQueue> queues = new HashMap<Integer, HeldPacketQueue>();
 
-    /** When each entity last had a packet held, so callers can tell whose movement is distorted. */
+    /** Engagement and cooldown state. Event loop only. */
+    private final HoldWindow window = new HoldWindow();
+
+    /** When each entity last had a packet held. Read from the client thread, hence concurrent. */
     private final Map<Integer, Long> lastHeldAt = new ConcurrentHashMap<Integer, Long>();
 
-    private volatile Set<Integer> targets = Collections.emptySet();
-    private volatile long delayMillis;
+    private volatile Set<Integer> eligible = Collections.emptySet();
+    private volatile long maxDelayMillis;
+    private volatile long cooldownMillis;
     private volatile boolean active;
     private volatile int localEntityId = NO_ENTITY;
     private volatile ChannelHandlerContext context;
@@ -100,15 +118,23 @@ public final class PacketDelayer extends ChannelInboundHandlerAdapter {
 
     // -- configuration, called from the client thread ----------------------------------------
 
-    /** The entities whose movement should be held. Replaced wholesale; never mutated in place. */
-    public void setTargets(Set<Integer> newTargets) {
-        this.targets = newTargets == null || newTargets.isEmpty()
+    /**
+     * The targets currently worth holding - already filtered for distance and hurt time by the
+     * caller. Whether one is actually held also depends on their window and cooldown, which are
+     * decided here.
+     */
+    public void setEligible(Set<Integer> newEligible) {
+        this.eligible = newEligible == null || newEligible.isEmpty()
                 ? Collections.<Integer>emptySet()
-                : Collections.unmodifiableSet(newTargets);
+                : Collections.unmodifiableSet(newEligible);
     }
 
-    public void setDelayMillis(long millis) {
-        this.delayMillis = Math.max(0L, millis);
+    public void setMaxDelayMillis(long millis) {
+        this.maxDelayMillis = Math.max(0L, millis);
+    }
+
+    public void setCooldownMillis(long millis) {
+        this.cooldownMillis = Math.max(0L, millis);
     }
 
     /** The local player's entity id, so their own packets can be excluded outright. */
@@ -116,7 +142,7 @@ public final class PacketDelayer extends ChannelInboundHandlerAdapter {
         this.localEntityId = entityId;
     }
 
-    /** Nothing is held while this is false, whatever the target set says. */
+    /** Nothing is held while this is false, whatever the eligible set says. */
     public void setActive(boolean value) {
         this.active = value;
     }
@@ -125,24 +151,20 @@ public final class PacketDelayer extends ChannelInboundHandlerAdapter {
         return active;
     }
 
-    public int getHeldCount() {
-        return queue.size();
-    }
-
     /**
-     * Whether this entity's movement is currently being distorted by the delay.
+     * Whether this entity's movement is currently being distorted.
      *
      * <p>True through both halves of the effect - the stall while packets are held, and the catch-up
-     * burst when they are released - because anything differencing consecutive positions has to
+     * burst when the window closes - because anything differencing consecutive positions has to
      * discard both. The grace period runs past the last hold for that reason; the catch-up happens
      * after holding has already stopped.
      */
     public boolean isDistorting(int entityId) {
-        Long at = lastHeldAt.get(entityId);
+        Long at = lastHeldAt.get(Integer.valueOf(entityId));
         if (at == null) {
             return false;
         }
-        long grace = Math.max(MINIMUM_DISTORTION_GRACE_MILLIS, delayMillis + 500L);
+        long grace = Math.max(MINIMUM_DISTORTION_GRACE_MILLIS, maxDelayMillis + 500L);
         return System.currentTimeMillis() - at.longValue() < grace;
     }
 
@@ -173,7 +195,7 @@ public final class PacketDelayer extends ChannelInboundHandlerAdapter {
             onEventLoop(ctx, new Runnable() {
                 @Override
                 public void run() {
-                    release(ctx, queue.drainAll());
+                    releaseEverything(ctx);
                     removeFrom(ctx.pipeline());
                     context = null;
                     // A pending task would clear this itself, but only if the event loop lives long
@@ -184,7 +206,7 @@ public final class PacketDelayer extends ChannelInboundHandlerAdapter {
             return;
         }
         // Never attached, or the connection went away underneath us.
-        queue.discardAll();
+        discardEverything();
         NetHandlerPlayClient handler = Minecraft.getMinecraft().getNetHandler();
         if (handler != null) {
             try {
@@ -196,28 +218,56 @@ public final class PacketDelayer extends ChannelInboundHandlerAdapter {
     }
 
     /**
-     * Hands everything queued to the game at once.
+     * Closes every open window and hands back what was held.
      *
-     * <p>The delay ending has to look like the connection catching up, not like packets going
+     * <p>The effect ending has to look like the connection catching up, not like packets going
      * missing - a dropped relative move would leave that player permanently offset.
      */
-    public void flush() {
+    public void flushAll() {
         final ChannelHandlerContext ctx = context;
         if (ctx == null) {
-            queue.discardAll();
+            discardEverything();
             return;
         }
         onEventLoop(ctx, new Runnable() {
             @Override
             public void run() {
-                release(ctx, queue.drainAll());
+                releaseEverything(ctx);
+            }
+        });
+    }
+
+    /**
+     * Ends windows that have run out or whose target stopped being worth holding.
+     *
+     * <p>Called once a tick. A pinned player sends nothing further, so without this their window
+     * would only close when the next packet happened to arrive - which, for someone standing still
+     * behind a wall, could be a long time.
+     */
+    public void tick() {
+        final ChannelHandlerContext ctx = context;
+        if (ctx == null) {
+            return;
+        }
+        onEventLoop(ctx, new Runnable() {
+            @Override
+            public void run() {
+                long now = System.currentTimeMillis();
+                Set<Integer> live = eligible;
+                for (Integer id : window.engaged()) {
+                    boolean lapsed = window.remaining(id.intValue(), now) <= 0L;
+                    if (lapsed || !active || !live.contains(id)) {
+                        endWindow(ctx, id.intValue(), now);
+                    }
+                }
+                window.pruneCooldowns(now);
             }
         });
     }
 
     /** Throws away queued packets and per-entity state. Only for a world that has already gone. */
     public void clear() {
-        queue.discardAll();
+        discardEverything();
         lastHeldAt.clear();
     }
 
@@ -230,7 +280,7 @@ public final class PacketDelayer extends ChannelInboundHandlerAdapter {
     @Override
     public void channelInactive(ChannelHandlerContext ctx) throws Exception {
         // The connection is gone; there is nothing left to deliver these to.
-        queue.discardAll();
+        discardEverything();
         lastHeldAt.clear();
         this.context = null;
         releaseScheduled = false;
@@ -252,27 +302,76 @@ public final class PacketDelayer extends ChannelInboundHandlerAdapter {
 
     /** @return true when the packet was queued, and so must not be passed on yet */
     private boolean hold(ChannelHandlerContext ctx, Object message) {
-        if (!active) {
-            return false;
-        }
-        long delay = delayMillis;
-        if (delay <= 0L) {
-            return false;
-        }
         int entityId = delayableEntityId(message);
         if (entityId == NO_ENTITY || entityId == localEntityId) {
             return false;
         }
-        if (!targets.contains(Integer.valueOf(entityId))) {
+
+        long now = System.currentTimeMillis();
+
+        if (!active || !eligible.contains(Integer.valueOf(entityId))) {
+            // No longer worth holding: let them catch up before this packet goes through.
+            if (window.isEngaged(entityId)) {
+                endWindow(ctx, entityId, now);
+            }
+            return false;
+        }
+        if (window.isCoolingDown(entityId, now)) {
+            return false;
+        }
+        if (!window.beginOrContinue(entityId, now, maxDelayMillis)) {
+            // The window just ran out on this packet's arrival.
+            endWindow(ctx, entityId, now);
             return false;
         }
 
-        long now = System.currentTimeMillis();
+        // Every packet in one window releases when the window closes, not one delay each - that is
+        // what pins the target rather than trailing them.
+        long remaining = window.remaining(entityId, now);
         lastHeldAt.put(Integer.valueOf(entityId), Long.valueOf(now));
-        // Anything the queue evicted to make room is older than this packet, so it goes out first.
-        release(ctx, queue.hold(message, entityId, now, delay));
+        HeldPacketQueue queue = queueFor(entityId);
+        release(ctx, queue.hold(message, entityId, now, remaining));
         ensureReleaseScheduled(ctx);
         return true;
+    }
+
+    private HeldPacketQueue queueFor(int entityId) {
+        Integer key = Integer.valueOf(entityId);
+        HeldPacketQueue queue = queues.get(key);
+        if (queue == null) {
+            queue = new HeldPacketQueue(PER_TARGET_CAPACITY);
+            queues.put(key, queue);
+        }
+        return queue;
+    }
+
+    /** Ends one target's window, delivers what was held, and starts their cooldown. */
+    private void endWindow(ChannelHandlerContext ctx, int entityId, long now) {
+        HeldPacketQueue queue = queues.remove(Integer.valueOf(entityId));
+        if (queue != null) {
+            release(ctx, queue.drainAll());
+        }
+        window.end(entityId, now, cooldownMillis);
+    }
+
+    private void releaseEverything(ChannelHandlerContext ctx) {
+        long now = System.currentTimeMillis();
+        for (Integer id : window.engaged()) {
+            endWindow(ctx, id.intValue(), now);
+        }
+        // Anything queued without an open window, which should not happen, still goes out.
+        for (HeldPacketQueue queue : queues.values()) {
+            release(ctx, queue.drainAll());
+        }
+        queues.clear();
+    }
+
+    private void discardEverything() {
+        for (HeldPacketQueue queue : queues.values()) {
+            queue.discardAll();
+        }
+        queues.clear();
+        window.clear();
     }
 
     // -- releasing, all on the event loop -----------------------------------------------------
@@ -281,7 +380,7 @@ public final class PacketDelayer extends ChannelInboundHandlerAdapter {
         if (releaseScheduled) {
             return;
         }
-        Long due = queue.nextReleaseAtMillis();
+        Long due = earliestRelease();
         if (due == null) {
             return;
         }
@@ -292,19 +391,36 @@ public final class PacketDelayer extends ChannelInboundHandlerAdapter {
                 @Override
                 public void run() {
                     releaseScheduled = false;
-                    release(ctx, queue.drainDue(System.currentTimeMillis()));
-                    // Release times can be pushed back to preserve order, so the packet this task
-                    // was scheduled for is not always due yet. Chaining from the head rather than
-                    // relying on one task per packet is what stops a straggler sitting there.
+                    long now = System.currentTimeMillis();
+                    for (Integer id : window.expired(now)) {
+                        endWindow(ctx, id.intValue(), now);
+                    }
+                    // Release times can be pushed back to preserve order, so a window's packets are
+                    // not always due when its task fires. Chaining from the earliest still queued
+                    // is what stops a straggler sitting there.
+                    for (Map.Entry<Integer, HeldPacketQueue> entry : queues.entrySet()) {
+                        release(ctx, entry.getValue().drainDue(now));
+                    }
                     ensureReleaseScheduled(ctx);
                 }
             }, wait, TimeUnit.MILLISECONDS);
         } catch (Throwable failure) {
             releaseScheduled = false;
             // No way to schedule means no way to ever deliver these; hand them over now instead.
-            Vantage.LOGGER.warn("Could not schedule a packet release; delivering the queue now", failure);
-            release(ctx, queue.drainAll());
+            Vantage.LOGGER.warn("Could not schedule a packet release; delivering everything now", failure);
+            releaseEverything(ctx);
         }
+    }
+
+    private Long earliestRelease() {
+        Long earliest = null;
+        for (HeldPacketQueue queue : queues.values()) {
+            Long due = queue.nextReleaseAtMillis();
+            if (due != null && (earliest == null || due.longValue() < earliest.longValue())) {
+                earliest = due;
+            }
+        }
+        return earliest;
     }
 
     private void release(ChannelHandlerContext ctx, List<HeldPacketQueue.Held> held) {
