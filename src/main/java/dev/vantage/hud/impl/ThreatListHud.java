@@ -8,8 +8,10 @@ import dev.vantage.gui.font.Fonts;
 import dev.vantage.gui.render.RenderUtil;
 import dev.vantage.hud.HudModule;
 import dev.vantage.hypixel.ApiKeyStore;
+import dev.vantage.hypixel.BedwarsStats;
 import dev.vantage.module.Category;
 import dev.vantage.setting.BooleanSetting;
+import dev.vantage.setting.EnumSetting;
 import dev.vantage.setting.NumberSetting;
 import dev.vantage.setting.StringSetting;
 import dev.vantage.threat.ThreatEntry;
@@ -23,31 +25,48 @@ import java.util.Locale;
 /**
  * Ranks everyone in the game by how dangerous they are, most dangerous at the top.
  *
- * <p>Deliberately just a score and a name in their team's colour. The earlier version also showed
- * team, final kill ratio, star and gear in aligned columns, which was four numbers asking to be
- * read and compared when the whole point of the score is that it already accounts for them.
+ * <p>Columns are measured against the current contents every frame so they stay aligned as names
+ * and numbers change, rather than being padded to a guessed width. Names carry their team's colour,
+ * which is the fastest way to tell at a glance whether the player at the top of the list is someone
+ * you are about to fight or someone standing next to you.
  */
 public class ThreatListHud extends HudModule {
 
+    /** How much of each player to show. One setting rather than a toggle per column. */
+    public enum Detail {
+        /** Just the number and who it belongs to. */
+        SCORE,
+        /** Adds the stats behind the number. */
+        STATS,
+        /** Adds their team and what they are carrying. */
+        FULL
+    }
+
     private static final float ROW_HEIGHT = 10.0f;
-    private static final float GAP = 5.0f;
+    private static final float COLUMN_GAP = 5.0f;
     private static final float FLAG_SIZE = 4.0f;
 
     private final NumberSetting maxPlayers = register(new NumberSetting(
             "Max Players", "How many rows to show", 8, 1, 16, 1));
+    private final EnumSetting<Detail> detail = register(new EnumSetting<Detail>(
+            "Detail", "How much to show for each player", Detail.FULL));
     private final BooleanSetting enemiesOnly = register(new BooleanSetting(
             "Enemies Only", "Hide your own team", false));
-    private final BooleanSetting scoreOnRight = register(new BooleanSetting(
-            "Score On Right", "Put the number after the name instead of before it", false));
     private final StringSetting apiKey = register(new StringSetting(
             "Hypixel API Key", "From developer.hypixel.net. Stored outside your config profile.",
             "", 64, true));
 
     private final ThreatTracker tracker = new ThreatTracker();
     private ApiKeyStore keyStore;
+    private boolean keyLoaded;
 
+    // Column widths, measured once per frame in getContentWidth and reused by renderContent.
     private float scoreColumn;
+    private float teamColumn;
     private float nameColumn;
+    private float ratioColumn;
+    private float starColumn;
+    private float gearColumn;
     private float measuredWidth;
     private int rowsShown;
 
@@ -59,6 +78,8 @@ public class ThreatListHud extends HudModule {
             persistKey(value);
         });
     }
+
+    // -- API key ----------------------------------------------------------------------------
 
     /**
      * The key file, created the first time anything needs it.
@@ -73,8 +94,6 @@ public class ThreatListHud extends HudModule {
         }
         return keyStore;
     }
-
-    private boolean keyLoaded;
 
     private void ensureKeyLoaded() {
         if (keyLoaded) {
@@ -100,6 +119,8 @@ public class ThreatListHud extends HudModule {
             Vantage.LOGGER.error("Could not write the API key file", failure);
         }
     }
+
+    // -- lifecycle --------------------------------------------------------------------------
 
     @Override
     public void onTick() {
@@ -127,8 +148,33 @@ public class ThreatListHud extends HudModule {
         return all.subList(0, Math.max(0, Math.min(all.size(), maxPlayers.asInt())));
     }
 
+    // -- cell text --------------------------------------------------------------------------
+
     private static String scoreText(ThreatEntry entry) {
         return String.format(Locale.ROOT, "%.1f", entry.getScore());
+    }
+
+    private static String ratioText(ThreatEntry entry) {
+        BedwarsStats stats = entry.getInput().getStats();
+        if (stats.isUnknown()) {
+            return entry.getInput().isNicked() ? "nick" : "-";
+        }
+        return String.format(Locale.ROOT, "%.1f", stats.getFinalKillDeathRatio());
+    }
+
+    private static String starText(ThreatEntry entry) {
+        BedwarsStats stats = entry.getInput().getStats();
+        // The four-pointed star the obvious choice has no glyph in the bundled font, checked on a
+        // real Java 8 runtime; the five-pointed one does.
+        return stats.isUnknown() ? "-" : "★" + stats.getStar();
+    }
+
+    private boolean showStats() {
+        return detail.get() != Detail.SCORE;
+    }
+
+    private boolean showTeamAndGear() {
+        return detail.get() == Detail.FULL;
     }
 
     // -- layout -----------------------------------------------------------------------------
@@ -138,26 +184,48 @@ public class ThreatListHud extends HudModule {
         List<ThreatEntry> entries = visibleEntries();
         rowsShown = entries.size();
 
-        // A fixed score column keeps the names aligned; "10.0" is the widest it gets.
+        // A fixed score column keeps names aligned; "10.0" is the widest it gets.
         scoreColumn = Fonts.SMALL_BOLD.getWidth("10.0");
+        teamColumn = 0.0f;
         nameColumn = 0.0f;
+        ratioColumn = 0.0f;
+        starColumn = 0.0f;
+        gearColumn = 0.0f;
+
         for (ThreatEntry entry : entries) {
-            float width = Fonts.SMALL.getWidth(entry.getName());
+            float nameWidth = Fonts.SMALL.getWidth(entry.getName());
             if (entry.isFlaggedForCheating()) {
-                width += FLAG_SIZE + 3.0f;
+                nameWidth += FLAG_SIZE + 3.0f;
             }
-            nameColumn = Math.max(nameColumn, width);
+            nameColumn = Math.max(nameColumn, nameWidth);
+
+            if (showTeamAndGear()) {
+                teamColumn = Math.max(teamColumn, Fonts.SMALL.getWidth(entry.getTeam()));
+                gearColumn = Math.max(gearColumn,
+                        Fonts.SMALL.getWidth(entry.getInput().getGear().shorthand()));
+            }
+            if (showStats()) {
+                ratioColumn = Math.max(ratioColumn, Fonts.SMALL.getWidth(ratioText(entry)));
+                starColumn = Math.max(starColumn, Fonts.SMALL.getWidth(starText(entry)));
+            }
+        }
+
+        float total = scoreColumn;
+        for (float column : new float[]{teamColumn, nameColumn, ratioColumn, starColumn, gearColumn}) {
+            if (column > 0.0f) {
+                total += COLUMN_GAP + column;
+            }
         }
 
         String status = tracker.getStatusMessage();
-        float total = scoreColumn + GAP + nameColumn;
         if (status != null) {
             total = Math.max(total, Fonts.SMALL.getWidth(status));
         }
         if (entries.isEmpty() && status == null) {
             total = Math.max(total, Fonts.SMALL.getWidth("Waiting for players"));
         }
-        measuredWidth = Math.max(58.0f, total);
+        // A minimum keeps the panel from collapsing to a sliver between games.
+        measuredWidth = Math.max(70.0f, total);
         return measuredWidth;
     }
 
@@ -186,29 +254,46 @@ public class ThreatListHud extends HudModule {
     }
 
     private void drawRow(ThreatEntry entry, float y) {
-        int scoreColour = Theme.threatColour(entry.getScore());
         boolean flagged = entry.isFlaggedForCheating();
-        int nameColour = flagged
-                ? Theme.danger()
-                : TeamColour.fromName(entry.getTeam()).getArgb();
+        int teamColour = TeamColour.fromName(entry.getTeam()).getArgb();
+        int scoreColour = Theme.threatColour(entry.getScore());
 
-        String score = scoreText(entry);
-        float nameX;
-        if (scoreOnRight.value()) {
-            nameX = 0.0f;
-            Fonts.SMALL_BOLD.drawRightAligned(score, measuredWidth, y, scoreColour);
-        } else {
-            nameX = scoreColumn + GAP;
-            // Right-aligned inside its column so the decimal points line up down the list.
-            Fonts.SMALL_BOLD.drawRightAligned(score, scoreColumn, y, scoreColour);
+        float x = 0.0f;
+        // Right-aligned in its column so the decimal points line up down the list.
+        Fonts.SMALL_BOLD.drawRightAligned(scoreText(entry), scoreColumn, y, scoreColour);
+        x += scoreColumn;
+
+        if (teamColumn > 0.0f) {
+            x += COLUMN_GAP;
+            Fonts.SMALL.drawString(entry.getTeam(), x, y, teamColour);
+            x += teamColumn;
         }
 
-        float nameEnd = Fonts.SMALL.drawString(entry.getName(), nameX, y, nameColour);
-
+        x += COLUMN_GAP;
+        // Their team's colour, so who is on which side reads without checking the team column.
+        // A flagged player overrides it, since that matters more than which team they are on.
+        float nameEnd = Fonts.SMALL.drawString(entry.getName(), x,
+                y, flagged ? Theme.danger() : teamColour);
         if (flagged) {
             // A shape as well as the colour, so the mark survives a colour-blind reading.
             RenderUtil.circle(nameEnd + 3.0f + FLAG_SIZE / 2.0f, y + ROW_HEIGHT / 2.0f - 1.0f,
                     FLAG_SIZE / 2.0f, Theme.danger());
+        }
+        x += nameColumn;
+
+        if (ratioColumn > 0.0f) {
+            x += COLUMN_GAP;
+            Fonts.SMALL.drawString(ratioText(entry), x, y, Theme.textMuted());
+            x += ratioColumn;
+        }
+        if (starColumn > 0.0f) {
+            x += COLUMN_GAP;
+            Fonts.SMALL.drawString(starText(entry), x, y, Theme.textMuted());
+            x += starColumn;
+        }
+        if (gearColumn > 0.0f) {
+            x += COLUMN_GAP;
+            Fonts.SMALL.drawString(entry.getInput().getGear().shorthand(), x, y, Theme.textFaint());
         }
     }
 }

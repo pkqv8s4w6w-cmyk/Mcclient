@@ -3,6 +3,7 @@ package dev.vantage.threat;
 import dev.vantage.Vantage;
 import dev.vantage.detect.Flagged;
 import dev.vantage.game.DeathMessageParser;
+import dev.vantage.game.GameDetector;
 import dev.vantage.game.LobbyReader;
 import dev.vantage.game.SidebarParser;
 import dev.vantage.game.TeamColour;
@@ -48,6 +49,7 @@ public final class ThreatTracker {
     private volatile String apiKey = "";
     private volatile List<ThreatEntry> entries = Collections.emptyList();
     private volatile ApiResult.Status lastFailure;
+    private volatile boolean inGame;
 
     private int tickCounter;
 
@@ -86,6 +88,9 @@ public final class ThreatTracker {
 
     /** A short line explaining why the list is empty or incomplete, or null when all is well. */
     public String getStatusMessage() {
+        if (!inGame) {
+            return "Not in a game";
+        }
         if (apiKey.isEmpty()) {
             return "No API key set";
         }
@@ -109,6 +114,7 @@ public final class ThreatTracker {
 
     /** Drops per-game state. Called when the player joins a different world. */
     public void reset() {
+        inGame = false;
         killsThisGame.clear();
         deathsThisGame.clear();
         entries = Collections.emptyList();
@@ -140,6 +146,15 @@ public final class ThreatTracker {
             return;
         }
         tickCounter = 0;
+
+        // The tab list alone is not a lobby. In a hub it carries everyone standing around, which
+        // is how unrelated names ended up in the list; the scoreboard title is what says whether
+        // there is a game to list at all. Inside one, the tab list is exactly the participants.
+        inGame = GameDetector.isBedwars(LobbyReader.readSidebarTitle());
+        if (!inGame) {
+            entries = Collections.emptyList();
+            return;
+        }
 
         Minecraft mc = Minecraft.getMinecraft();
         if (mc.thePlayer == null) {

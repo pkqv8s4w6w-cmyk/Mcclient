@@ -13,7 +13,7 @@ servers.
 
 | Module | What it does |
 |---|---|
-| Threat List | Ranks the lobby 0–10, most dangerous at the top, from lifetime stats, current gear and how the game is going for them |
+| Threat List | Ranks everyone in your game 0–10, most dangerous at the top, with their team colour, final kill ratio, star and current gear |
 | Cheat Detector | Nine checks across combat, movement and building. Names the team and player in chat, and flagged players go to the top of the threat list |
 
 **HUD** — Keystrokes, CPS, Info (fps / ping / coordinates / facing), Armour, Potions.
@@ -89,6 +89,14 @@ almost every time; **10** is ranked tier, a very high final kill ratio, and you 
 
 Six realistic player profiles are asserted as score bands in the test suite, so the calibration is
 checked on every build rather than discovered in a game.
+
+The list only appears when you are actually in a Bedwars game or its pre-game lobby, decided from
+the scoreboard title. A tab list on its own is not a lobby: in a hub it carries everyone standing
+around, which is how unrelated names ended up in the list. Inside a game the tab list is exactly the
+participants, so nothing further needs filtering.
+
+**Detail** controls how much of each player is shown — score and name, plus their stats, or the full
+row with team and gear. Names carry their team's colour throughout.
 
 ## What the cheat detector can and cannot see
 
