@@ -12,6 +12,7 @@ import dev.vantage.module.impl.analysis.CheatDetectorModule;
 import dev.vantage.module.impl.client.ClickGuiModule;
 import dev.vantage.module.impl.client.HudEditorModule;
 import dev.vantage.module.impl.client.ModsManagerModule;
+import dev.vantage.module.impl.utility.NickHiderModule;
 import dev.vantage.module.impl.utility.ToggleSprintModule;
 import dev.vantage.module.impl.utility.ZoomModule;
 import dev.vantage.module.impl.visual.FullbrightModule;
@@ -104,6 +105,7 @@ public class Vantage {
                 // Utility and visual
                 new ZoomModule(),
                 new ToggleSprintModule(),
+                new NickHiderModule(),
                 new FullbrightModule(),
                 // Client
                 new ClickGuiModule(),

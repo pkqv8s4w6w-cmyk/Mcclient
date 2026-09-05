@@ -160,6 +160,27 @@ public final class ModuleManager {
             return;
         }
         String raw = event.message.getFormattedText();
+
+        String display = raw;
+        for (Module module : modules) {
+            if (!module.isEnabled()) {
+                continue;
+            }
+            try {
+                String replacement = module.rewriteChat(display);
+                if (replacement != null) {
+                    display = replacement;
+                }
+            } catch (Throwable failure) {
+                disableAfterFailure(module, "rewriteChat", failure);
+            }
+        }
+        if (!display.equals(raw)) {
+            event.message = new net.minecraft.util.ChatComponentText(display);
+        }
+
+        // Observers always see the original. Kill parsing and the threat list work off real names,
+        // so handing them a nicked line would quietly break both.
         for (Module module : modules) {
             if (!module.isEnabled()) {
                 continue;

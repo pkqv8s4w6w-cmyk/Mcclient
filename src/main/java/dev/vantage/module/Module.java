@@ -146,8 +146,17 @@ public abstract class Module {
     public void onRenderWorld(float partialTicks) {
     }
 
-    /** A chat line arrived, colour codes and all. */
+    /** A chat line arrived, colour codes and all. Always the original, never a rewritten one. */
     public void onChatMessage(String raw) {
+    }
+
+    /**
+     * Rewrites a chat line before it is shown.
+     *
+     * @return replacement text, or null to leave the line alone
+     */
+    public String rewriteChat(String raw) {
+        return null;
     }
 
     /** The player moved to a different world, so per-game state should be dropped. */
