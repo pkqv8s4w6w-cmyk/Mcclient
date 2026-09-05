@@ -79,7 +79,7 @@ public class InfoHud extends HudModule {
     protected void renderContent() {
         float y = 0.0f;
         for (String line : lines()) {
-            Fonts.SMALL.drawString(line, 0.0f, y, Theme.TEXT);
+            Fonts.SMALL.drawString(line, 0.0f, y, Theme.text());
             y += Fonts.SMALL.getHeight() - 1.0f;
         }
     }

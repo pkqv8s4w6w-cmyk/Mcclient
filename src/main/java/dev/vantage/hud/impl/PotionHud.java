@@ -76,12 +76,12 @@ public class PotionHud extends HudModule {
     protected void renderContent() {
         List<String> lines = lines();
         if (lines.isEmpty()) {
-            Fonts.SMALL.drawString("No effects", 0.0f, 0.0f, Theme.TEXT_FAINT);
+            Fonts.SMALL.drawString("No effects", 0.0f, 0.0f, Theme.textFaint());
             return;
         }
         float y = 0.0f;
         for (String line : lines) {
-            Fonts.SMALL.drawString(line, 0.0f, y, Theme.TEXT);
+            Fonts.SMALL.drawString(line, 0.0f, y, Theme.text());
             y += Fonts.SMALL.getHeight() - 1.0f;
         }
     }

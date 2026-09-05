@@ -66,11 +66,11 @@ public class ModsScreen extends GuiScreen {
         drawGradientRect(0, 0, width, height, 0x70101014, 0xC0050506);
 
         RenderUtil.shadow(left(), top(), WIDTH, HEIGHT, Theme.PANEL_RADIUS, 8, 0x96000000);
-        RenderUtil.roundedRect(left(), top(), WIDTH, HEIGHT, Theme.PANEL_RADIUS, Theme.PANEL);
-        RenderUtil.roundedOutline(left(), top(), WIDTH, HEIGHT, Theme.PANEL_RADIUS, 1.0f, Theme.BORDER);
+        RenderUtil.roundedRect(left(), top(), WIDTH, HEIGHT, Theme.PANEL_RADIUS, Theme.panel());
+        RenderUtil.roundedOutline(left(), top(), WIDTH, HEIGHT, Theme.PANEL_RADIUS, 1.0f, Theme.border());
 
-        Fonts.TITLE.drawString("Mods", left() + PADDING, top() + 10.0f, Theme.TEXT);
-        Fonts.TINY.drawString(mods.size() + " installed", left() + PADDING, top() + 28.0f, Theme.TEXT_FAINT);
+        Fonts.TITLE.drawString("Mods", left() + PADDING, top() + 10.0f, Theme.text());
+        Fonts.TINY.drawString(mods.size() + " installed", left() + PADDING, top() + 28.0f, Theme.textFaint());
 
         drawList(mouseX, mouseY);
         drawSettings(mouseX, mouseY);
@@ -91,7 +91,7 @@ public class ModsScreen extends GuiScreen {
             cursor += ROW_HEIGHT;
         }
         if (!unattributed.isEmpty()) {
-            Fonts.TINY.drawString("UNMATCHED CONFIGS", x + 4.0f, cursor + 6.0f, Theme.TEXT_FAINT);
+            Fonts.TINY.drawString("UNMATCHED CONFIGS", x + 4.0f, cursor + 6.0f, Theme.textFaint());
             cursor += ROW_HEIGHT;
             for (File file : unattributed) {
                 drawRow(file.getName(), "", "editable", true,
@@ -108,16 +108,16 @@ public class ModsScreen extends GuiScreen {
             return;
         }
         boolean hovered = RenderUtil.isInside(mouseX, mouseY, x, y, LIST_WIDTH, ROW_HEIGHT - 2.0f);
-        int background = selected ? Theme.accentDim() : (hovered ? Theme.PANEL_HOVER : Theme.PANEL_RAISED);
+        int background = selected ? Theme.accentDim() : (hovered ? Theme.rowHover() : Theme.row());
         RenderUtil.roundedRect(x, y, LIST_WIDTH, ROW_HEIGHT - 2.0f, 4.0, background);
 
         Fonts.SMALL.drawString(Fonts.SMALL.trimToWidth(name, LIST_WIDTH - 60.0f), x + 7.0f, y + 3.0f,
-                editable ? Theme.TEXT : Theme.TEXT_MUTED);
+                editable ? Theme.text() : Theme.textMuted());
         if (!version.isEmpty()) {
-            Fonts.TINY.drawString(version, x + 7.0f, y + 13.0f, Theme.TEXT_FAINT);
+            Fonts.TINY.drawString(version, x + 7.0f, y + 13.0f, Theme.textFaint());
         }
         Fonts.TINY.drawRightAligned(status, x + LIST_WIDTH - 7.0f, y + 8.0f,
-                editable ? Theme.SAFE : Theme.TEXT_FAINT);
+                editable ? Theme.safe() : Theme.textFaint());
     }
 
     private void drawSettings(int mouseX, int mouseY) {
@@ -127,17 +127,17 @@ public class ModsScreen extends GuiScreen {
         float viewportHeight = HEIGHT - 52.0f;
 
         if (open == null) {
-            Fonts.SMALL.drawString("Select a mod to edit its settings.", x, y, Theme.TEXT_FAINT);
+            Fonts.SMALL.drawString("Select a mod to edit its settings.", x, y, Theme.textFaint());
             Fonts.TINY.drawString("Mods using their own config format are listed but cannot be",
-                    x, y + 18.0f, Theme.TEXT_FAINT);
+                    x, y + 18.0f, Theme.textFaint());
             Fonts.TINY.drawString("edited here - there is no shared format to read.",
-                    x, y + 28.0f, Theme.TEXT_FAINT);
+                    x, y + 28.0f, Theme.textFaint());
             return;
         }
 
-        Fonts.SMALL_BOLD.drawString(openLabel, x, y, Theme.TEXT);
+        Fonts.SMALL_BOLD.drawString(openLabel, x, y, Theme.text());
         Fonts.TINY.drawString(notice.isEmpty() ? "Changes apply after a restart for most mods" : notice,
-                x, y + 12.0f, notice.isEmpty() ? Theme.TEXT_FAINT : Theme.SAFE);
+                x, y + 12.0f, notice.isEmpty() ? Theme.textFaint() : Theme.safe());
 
         float saveWidth = 52.0f;
         float saveX = x + paneWidth - saveWidth;

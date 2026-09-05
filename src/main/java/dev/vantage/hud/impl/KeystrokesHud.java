@@ -86,6 +86,6 @@ public class KeystrokesHud extends HudModule {
         int background = pressed ? Theme.accent() : 0x50202329;
         RenderUtil.roundedRect(x, y, width, KEY_SIZE, 3.0, background);
         Fonts.SMALL.drawCentred(label, x + width / 2.0f, y + (KEY_SIZE - Fonts.SMALL.getHeight()) / 2.0f + 1.0f,
-                pressed ? 0xFFFFFFFF : Theme.TEXT_MUTED);
+                pressed ? 0xFFFFFFFF : Theme.textMuted());
     }
 }

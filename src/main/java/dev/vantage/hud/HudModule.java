@@ -122,7 +122,7 @@ public abstract class HudModule extends Module {
             RenderUtil.roundedRect(0.0f, 0.0f,
                     getContentWidth() + PADDING * 2.0f,
                     getContentHeight() + PADDING * 2.0f,
-                    3.5, RenderUtil.withAlpha(Theme.PANEL, alpha));
+                    3.5, RenderUtil.withAlpha(Theme.panel(), alpha));
         }
 
         GlStateManager.translate(PADDING, PADDING, 0.0f);

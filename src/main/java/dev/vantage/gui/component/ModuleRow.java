@@ -11,22 +11,32 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * One module in the list: a header that toggles it, and its settings expanding underneath.
+ * One module in the list: a name that toggles, and its settings expanding underneath.
  *
  * <p>Left click toggles, right click opens the settings. That split is the convention in this kind
- * of client and means the common action never costs an extra click.
+ * of client and keeps the common action to one click.
+ *
+ * <p>Deliberately carries no description text. A subtitle on every row is what made the list read
+ * as a wall rather than a list; the description surfaces as a tooltip after a short hover instead,
+ * which the parent screen draws so it can sit above everything else.
  */
 public class ModuleRow {
 
-    private static final float HEADER_HEIGHT = 26.0f;
-    private static final float SETTINGS_PADDING = 4.0f;
+    public static final float HEADER_HEIGHT = 19.0f;
+
+    /** How long the cursor must rest on a row before its description appears. */
+    private static final long TOOLTIP_DELAY_MILLIS = 450L;
 
     private final Module module;
     private final List<SettingComponent> components = new ArrayList<SettingComponent>();
 
-    private final Animated expansion = new Animated(0.0, 0.11);
-    private final Animated enabledGlow;
+    private final Animated expansion = new Animated(0.0, 0.055);
+    private final Animated lit;
+    private final Animated hoverGlow = new Animated(0.0, 0.04);
+
     private boolean expanded;
+    private boolean hovered;
+    private long hoverSince;
 
     private float x;
     private float y;
@@ -34,7 +44,7 @@ public class ModuleRow {
 
     public ModuleRow(Module module) {
         this.module = module;
-        this.enabledGlow = new Animated(module.isEnabled() ? 1.0 : 0.0, 0.08);
+        this.lit = new Animated(module.isEnabled() ? 1.0 : 0.0, 0.045);
         for (Setting<?> setting : module.getSettings()) {
             SettingComponent component = SettingComponent.create(setting);
             if (component != null) {
@@ -53,58 +63,73 @@ public class ModuleRow {
         this.width = width;
     }
 
-    /** Height of the settings block when fully open, counting only currently visible settings. */
-    private float expandedContentHeight() {
+    public float getY() {
+        return y;
+    }
+
+    /** True while the cursor has rested long enough that a tooltip is warranted. */
+    public boolean wantsTooltip() {
+        return hovered
+                && !module.getDescription().isEmpty()
+                && System.currentTimeMillis() - hoverSince > TOOLTIP_DELAY_MILLIS;
+    }
+
+    public String getTooltip() {
+        return module.getDescription();
+    }
+
+    private float settingsHeight() {
         if (components.isEmpty()) {
             return 0.0f;
         }
-        float total = SETTINGS_PADDING;
+        float total = Theme.UNIT;
         for (SettingComponent component : components) {
-            if (!component.getSetting().isVisible()) {
-                continue;
+            if (component.getSetting().isVisible()) {
+                total += component.getHeight();
             }
-            total += component.getHeight();
         }
-        return total + SETTINGS_PADDING;
+        return total + Theme.UNIT;
     }
 
     public float getHeight() {
         expansion.setTarget(expanded && !components.isEmpty() ? 1.0 : 0.0);
-        return HEADER_HEIGHT + (float) (expandedContentHeight() * expansion.get());
+        return HEADER_HEIGHT + (float) (settingsHeight() * expansion.get());
     }
 
     public void render(float mouseX, float mouseY) {
-        boolean headerHovered = mouseX >= x && mouseX <= x + width && mouseY >= y && mouseY <= y + HEADER_HEIGHT;
+        boolean nowHovered = mouseX >= x && mouseX <= x + width && mouseY >= y && mouseY <= y + HEADER_HEIGHT;
+        if (nowHovered && !hovered) {
+            hoverSince = System.currentTimeMillis();
+        }
+        hovered = nowHovered;
 
-        enabledGlow.setTarget(module.isEnabled() ? 1.0 : 0.0);
-        double lit = enabledGlow.get();
+        lit.setTarget(module.isEnabled() ? 1.0 : 0.0);
+        hoverGlow.setTarget(nowHovered ? 1.0 : 0.0);
+        double on = lit.get();
+        double hover = hoverGlow.get();
 
-        int background = RenderUtil.blend(
-                headerHovered ? Theme.PANEL_HOVER : Theme.PANEL_RAISED,
-                Theme.accentDim(),
-                lit * 0.85);
-        RenderUtil.roundedRect(x, y, width, getHeight(), Theme.CORNER_RADIUS, background);
+        float totalHeight = getHeight();
 
-        // A bar down the left edge is a much faster read than a colour change alone.
-        if (lit > 0.01) {
-            RenderUtil.roundedRect(x, y + 5.0f, 2.5f, HEADER_HEIGHT - 10.0f, 1.25,
-                    RenderUtil.withAlpha(Theme.accent(), (float) lit));
+        // Base row, lifted on hover and tinted toward the accent when the module is on.
+        int background = RenderUtil.blend(Theme.row(), Theme.rowHover(), hover);
+        background = RenderUtil.blend(background, Theme.accentDim(), on * 0.9);
+        RenderUtil.roundedRect(x, y, width, totalHeight, Theme.ROW_RADIUS, background);
+
+        // A bar down the left edge reads far faster than a colour change alone.
+        if (on > 0.01) {
+            RenderUtil.roundedRect(x, y + 4.0f, 2.0f, HEADER_HEIGHT - 8.0f, 1.0,
+                    RenderUtil.withAlpha(Theme.accent(), (float) on));
         }
 
-        int nameColour = RenderUtil.blend(Theme.TEXT_MUTED, Theme.TEXT, lit);
-        Fonts.BODY.drawString(module.getName(), x + 11.0f, y + 4.0f, nameColour);
-
-        if (!module.getDescription().isEmpty()) {
-            String description = Fonts.TINY.trimToWidth(module.getDescription(), width - 46.0f);
-            Fonts.TINY.drawString(description, x + 11.0f, y + 15.0f, Theme.TEXT_FAINT);
-        }
+        int nameColour = RenderUtil.blend(Theme.textMuted(), Theme.text(), on);
+        float textY = y + (HEADER_HEIGHT - Fonts.BODY.getHeight()) / 2.0f;
+        Fonts.BODY.drawString(module.getName(), x + Theme.UNIT * 2.0f, textY, nameColour);
 
         if (!components.isEmpty()) {
-            float caretX = x + width - 13.0f;
-            float caretY = y + HEADER_HEIGHT / 2.0f - 3.0f;
-            // Rotating the glyph is not an option with a baked atlas, so swap it instead.
-            Fonts.TINY.drawCentred(expansion.get() > 0.5 ? "▲" : "▼", caretX, caretY,
-                    headerHovered ? Theme.TEXT_MUTED : Theme.TEXT_FAINT);
+            // The glyph swaps rather than rotating; a baked atlas cannot spin.
+            Fonts.TINY.drawRightAligned(expansion.get() > 0.5 ? "▲" : "▼",
+                    x + width - Theme.UNIT * 2.0f, y + (HEADER_HEIGHT - Fonts.TINY.getHeight()) / 2.0f,
+                    nowHovered ? Theme.textMuted() : Theme.textFaint());
         }
 
         float openness = (float) expansion.get();
@@ -112,20 +137,28 @@ public class ModuleRow {
             return;
         }
 
-        float cursor = y + HEADER_HEIGHT + SETTINGS_PADDING;
+        // A rule down the settings group ties them to their module rather than leaving them
+        // floating as separate rows.
+        float groupTop = y + HEADER_HEIGHT;
+        float groupHeight = totalHeight - HEADER_HEIGHT;
+        RenderUtil.rect(x + Theme.UNIT * 2.0f, groupTop, 1.0f, groupHeight,
+                RenderUtil.withAlpha(Theme.accent(), 0.25f * openness));
+
+        float cursor = groupTop + Theme.UNIT;
+        float indent = Theme.UNIT * 2.5f;
         for (SettingComponent component : components) {
             if (!component.getSetting().isVisible()) {
                 continue;
             }
-            component.setBounds(x, cursor, width);
+            component.setBounds(x + indent, cursor, width - indent);
             component.render(mouseX, mouseY);
             cursor += component.getHeight();
         }
     }
 
     public boolean mouseClicked(float mouseX, float mouseY, int button) {
-        boolean headerHovered = mouseX >= x && mouseX <= x + width && mouseY >= y && mouseY <= y + HEADER_HEIGHT;
-        if (headerHovered) {
+        boolean onHeader = mouseX >= x && mouseX <= x + width && mouseY >= y && mouseY <= y + HEADER_HEIGHT;
+        if (onHeader) {
             if (button == 0) {
                 module.toggle();
                 return true;

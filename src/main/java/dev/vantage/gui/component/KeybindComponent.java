@@ -33,11 +33,11 @@ public class KeybindComponent extends SettingComponent {
         if (hovered || listening) {
             RenderUtil.roundedRect(x, y, width, ROW_HEIGHT, 3.0, listening ? Theme.accentDim() : 0x0AFFFFFF);
         }
-        Fonts.SMALL.drawString(typed.getName(), x + LABEL_INSET, y + 2.0f, Theme.TEXT_MUTED);
+        Fonts.SMALL.drawString(typed.getName(), x + LABEL_INSET, y + 2.0f, Theme.textMuted());
 
         String label = listening ? "press a key" : describe(typed.get());
         Fonts.SMALL.drawRightAligned(label, x + width - LABEL_INSET, y + 2.0f,
-                listening ? Theme.accent() : (typed.isBound() ? Theme.TEXT : Theme.TEXT_FAINT));
+                listening ? Theme.accent() : (typed.isBound() ? Theme.text() : Theme.textFaint()));
     }
 
     public static String describe(int keyCode) {

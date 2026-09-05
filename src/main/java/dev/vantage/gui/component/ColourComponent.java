@@ -16,10 +16,10 @@ import java.awt.Color;
  */
 public class ColourComponent extends SettingComponent {
 
-    private static final float SQUARE_SIZE = 46.0f;
-    private static final float STRIP_WIDTH = 7.0f;
-    private static final float GAP = 5.0f;
-    private static final float PICKER_HEIGHT = SQUARE_SIZE + 22.0f;
+    private static final float SQUARE_SIZE = 40.0f;
+    private static final float STRIP_WIDTH = 6.0f;
+    private static final float GAP = 4.0f;
+    private static final float PICKER_HEIGHT = SQUARE_SIZE + 20.0f;
 
     private final ColorSetting typed;
     private final Animated expansion = new Animated(0.0, 0.10);
@@ -77,7 +77,7 @@ public class ColourComponent extends SettingComponent {
             updateFromDrag(mouseX, mouseY);
         }
 
-        Fonts.SMALL.drawString(typed.getName(), x + LABEL_INSET, y + 2.0f, Theme.TEXT_MUTED);
+        Fonts.SMALL.drawString(typed.getName(), x + LABEL_INSET, y + 2.0f, Theme.textMuted());
 
         float swatchSize = 9.0f;
         float swatchX = x + width - LABEL_INSET - swatchSize;
@@ -100,7 +100,7 @@ public class ColourComponent extends SettingComponent {
 
         String readout = String.format("#%06X", typed.get() & 0xFFFFFF);
         Fonts.TINY.drawString(readout, squareX(), squareY() + SQUARE_SIZE + 4.0f,
-                RenderUtil.withAlpha(Theme.TEXT_MUTED, fade));
+                RenderUtil.withAlpha(Theme.textMuted(), fade));
 
         // Rainbow toggle sits with the picker, since it only matters while choosing a colour.
         float toggleX = alphaX() + STRIP_WIDTH + GAP + 2.0f;
@@ -110,7 +110,7 @@ public class ColourComponent extends SettingComponent {
         RenderUtil.roundedRect(toggleX, squareY(), 46.0f, 12.0f, 3.0,
                 RenderUtil.withAlpha(rainbowHovered ? RenderUtil.shift(rainbowColour, 0.1) : rainbowColour, fade));
         Fonts.TINY.drawCentred("Rainbow", toggleX + 23.0f, squareY() + 2.0f,
-                RenderUtil.withAlpha(typed.isRainbow() ? 0xFFFFFFFF : Theme.TEXT_MUTED, fade));
+                RenderUtil.withAlpha(typed.isRainbow() ? 0xFFFFFFFF : Theme.textMuted(), fade));
     }
 
     private void drawSaturationValueSquare(int fade) {

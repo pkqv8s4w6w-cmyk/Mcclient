@@ -66,7 +66,7 @@ public class HudEditScreen extends GuiScreen {
                 RenderUtil.roundedOutline(x - 1.0f, y - 1.0f,
                         element.getWidth() + 2.0f, element.getHeight() + 2.0f,
                         4.5, 1.0f, active ? Theme.accent() : RenderUtil.withAlpha(Theme.accent(), 0.5f));
-                Fonts.TINY.drawString(element.getName(), x, y - 10.0f, Theme.TEXT);
+                Fonts.TINY.drawString(element.getName(), x, y - 10.0f, Theme.text());
             }
         }
 
@@ -123,9 +123,9 @@ public class HudEditScreen extends GuiScreen {
         float boxWidth = textWidth + 20.0f;
         float boxX = (width - boxWidth) / 2.0f;
         float boxY = height - 30.0f;
-        RenderUtil.roundedRect(boxX, boxY, boxWidth, 20.0f, 5.0, RenderUtil.withAlpha(Theme.PANEL, 220));
-        RenderUtil.roundedOutline(boxX, boxY, boxWidth, 20.0f, 5.0, 1.0f, Theme.BORDER);
-        Fonts.SMALL.drawCentred(hint, width / 2.0f, boxY + 4.5f, Theme.TEXT_MUTED);
+        RenderUtil.roundedRect(boxX, boxY, boxWidth, 20.0f, 5.0, RenderUtil.withAlpha(Theme.panel(), 220));
+        RenderUtil.roundedOutline(boxX, boxY, boxWidth, 20.0f, 5.0, 1.0f, Theme.border());
+        Fonts.SMALL.drawCentred(hint, width / 2.0f, boxY + 4.5f, Theme.textMuted());
     }
 
     @Override

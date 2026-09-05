@@ -7,6 +7,7 @@ import dev.vantage.gui.render.RenderUtil;
 import dev.vantage.module.Category;
 import dev.vantage.module.Module;
 import net.minecraft.client.gui.GuiScreen;
+import net.minecraft.client.renderer.GlStateManager;
 import net.minecraft.client.renderer.OpenGlHelper;
 import net.minecraft.client.shader.ShaderGroup;
 import net.minecraft.util.ResourceLocation;
@@ -16,34 +17,40 @@ import org.lwjgl.input.Mouse;
 import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 /**
  * The client's main interface.
  *
- * <p>A single centred window: categories down the left, modules in the middle, each module's
- * settings expanding in place beneath it. Everything is laid out in one top-down flow inside a
- * scissor rectangle, so scrolling and clipping stay correct without any component needing to know
- * it is in a scroll view.
+ * <p>Categories down the left, one dense column of modules in the middle, each module's settings
+ * expanding in place beneath it. Everything is laid out in a single top-down flow inside one
+ * scissor rectangle, so scrolling and clipping stay correct without any component knowing it sits
+ * in a scroll view.
+ *
+ * <p>Every measurement is a multiple of {@link Theme#UNIT}. That consistency is most of what
+ * separates a layout that looks designed from one that looks assembled.
  */
 public class ClickGui extends GuiScreen {
 
     public enum Background { DIM, GRADIENT, BLUR }
 
-    private static final float WINDOW_WIDTH = 540.0f;
-    private static final float WINDOW_HEIGHT = 348.0f;
-    private static final float RAIL_WIDTH = 66.0f;
-    private static final float HEADER_HEIGHT = 46.0f;
-    private static final float CONTENT_PADDING = 10.0f;
+    private static final float WINDOW_WIDTH = 360.0f;
+    private static final float WINDOW_HEIGHT = 286.0f;
+    private static final float RAIL_WIDTH = 74.0f;
+    private static final float PAD = Theme.UNIT * 2.0f;          // 8
+    private static final float HEADER_HEIGHT = Theme.UNIT * 8.5f; // 34
+    private static final float CATEGORY_HEIGHT = Theme.UNIT * 5.5f; // 22
+    private static final float SEARCH_HEIGHT = Theme.UNIT * 4.0f;  // 16
+    private static final float ROW_GAP = Theme.UNIT;
     private static final float SCROLLBAR_WIDTH = 3.0f;
-    private static final float SEARCH_HEIGHT = 18.0f;
 
     private final Map<Category, List<ModuleRow>> rowsByCategory = new EnumMap<Category, List<ModuleRow>>(Category.class);
     private final List<ModuleRow> allRows = new ArrayList<ModuleRow>();
 
-    private final Animated openProgress = new Animated(0.0, 0.10);
-    private final Animated scroll = new Animated(0.0, 0.07);
-    private final Animated railIndicator = new Animated(0.0, 0.09);
+    private final Animated openProgress = new Animated(0.0, 0.055);
+    private final Animated scroll = new Animated(0.0, 0.045);
+    private final Animated railIndicator = new Animated(0.0, 0.05);
 
     private Category selected = Category.ANALYSIS;
     private String search = "";
@@ -53,7 +60,6 @@ public class ClickGui extends GuiScreen {
 
     private ShaderGroup blur;
     private boolean blurUnavailable;
-
     private Background background = Background.GRADIENT;
 
     public ClickGui() {
@@ -87,7 +93,7 @@ public class ClickGui extends GuiScreen {
     @Override
     public void onGuiClosed() {
         // Persist as soon as the screen closes rather than only at shutdown, so a crash later in
-        // the session does not lose the changes just made.
+        // the session cannot lose the changes just made.
         Vantage.instance().saveConfig();
         if (blur != null) {
             blur.deleteShaderGroup();
@@ -98,15 +104,15 @@ public class ClickGui extends GuiScreen {
     // -- layout -----------------------------------------------------------------------------
 
     private float windowX() {
-        return (width - WINDOW_WIDTH) / 2.0f;
+        return Math.round((width - WINDOW_WIDTH) / 2.0f);
     }
 
     private float windowY() {
-        return (height - WINDOW_HEIGHT) / 2.0f;
+        return Math.round((height - WINDOW_HEIGHT) / 2.0f);
     }
 
     private float contentX() {
-        return windowX() + RAIL_WIDTH + CONTENT_PADDING;
+        return windowX() + RAIL_WIDTH + PAD;
     }
 
     private float contentY() {
@@ -114,22 +120,25 @@ public class ClickGui extends GuiScreen {
     }
 
     private float contentWidth() {
-        return WINDOW_WIDTH - RAIL_WIDTH - CONTENT_PADDING * 2.0f - SCROLLBAR_WIDTH - 3.0f;
+        return WINDOW_WIDTH - RAIL_WIDTH - PAD * 2.0f - SCROLLBAR_WIDTH - Theme.UNIT;
     }
 
     private float contentHeight() {
-        return WINDOW_HEIGHT - HEADER_HEIGHT - CONTENT_PADDING;
+        return WINDOW_HEIGHT - HEADER_HEIGHT - PAD;
     }
 
-    /** Rows to show: search results across every category, or the selected category's own. */
+    private float categoryTop() {
+        return windowY() + HEADER_HEIGHT + Theme.UNIT;
+    }
+
     private List<ModuleRow> visibleRows() {
         if (!search.trim().isEmpty()) {
-            String needle = search.trim().toLowerCase(java.util.Locale.ROOT);
+            String needle = search.trim().toLowerCase(Locale.ROOT);
             List<ModuleRow> matches = new ArrayList<ModuleRow>();
             for (ModuleRow row : allRows) {
                 Module module = row.getModule();
-                if (module.getName().toLowerCase(java.util.Locale.ROOT).contains(needle)
-                        || module.getDescription().toLowerCase(java.util.Locale.ROOT).contains(needle)) {
+                if (module.getName().toLowerCase(Locale.ROOT).contains(needle)
+                        || module.getDescription().toLowerCase(Locale.ROOT).contains(needle)) {
                     matches.add(row);
                 }
             }
@@ -145,49 +154,47 @@ public class ClickGui extends GuiScreen {
     public void drawScreen(int mouseX, int mouseY, float partialTicks) {
         drawBackground(partialTicks);
 
-        double opened = openProgress.get();
-        // Scale up very slightly as it opens; a pure fade reads as sluggish.
-        float eased = (float) Easing.outQuint(opened);
+        float eased = (float) Easing.outQuint(openProgress.get());
         int fade = (int) (255 * eased);
 
-        float scale = 0.97f + 0.03f * eased;
-        net.minecraft.client.renderer.GlStateManager.pushMatrix();
-        net.minecraft.client.renderer.GlStateManager.translate(width / 2.0f, height / 2.0f, 0.0f);
-        net.minecraft.client.renderer.GlStateManager.scale(scale, scale, 1.0f);
-        net.minecraft.client.renderer.GlStateManager.translate(-width / 2.0f, -height / 2.0f, 0.0f);
+        // A slight scale-up on open; a pure fade reads as sluggish.
+        float scale = 0.98f + 0.02f * eased;
+        GlStateManager.pushMatrix();
+        GlStateManager.translate(width / 2.0f, height / 2.0f, 0.0f);
+        GlStateManager.scale(scale, scale, 1.0f);
+        GlStateManager.translate(-width / 2.0f, -height / 2.0f, 0.0f);
 
-        RenderUtil.shadow(windowX(), windowY(), WINDOW_WIDTH, WINDOW_HEIGHT, Theme.PANEL_RADIUS, 8,
-                RenderUtil.withAlpha(0xFF000000, (int) (150 * eased)));
+        RenderUtil.shadow(windowX(), windowY(), WINDOW_WIDTH, WINDOW_HEIGHT, Theme.PANEL_RADIUS, 6,
+                RenderUtil.withAlpha(0xFF000000, (int) (120 * eased)));
         RenderUtil.roundedRect(windowX(), windowY(), WINDOW_WIDTH, WINDOW_HEIGHT, Theme.PANEL_RADIUS,
-                RenderUtil.withAlpha(Theme.PANEL, fade));
+                RenderUtil.withAlpha(Theme.panel(), fade));
 
         drawRail(mouseX, mouseY, fade);
-        drawHeader(mouseX, mouseY, fade);
+        drawSearch(mouseX, mouseY, fade);
         drawModules(mouseX, mouseY);
 
         RenderUtil.roundedOutline(windowX(), windowY(), WINDOW_WIDTH, WINDOW_HEIGHT, Theme.PANEL_RADIUS,
-                1.0f, RenderUtil.withAlpha(Theme.BORDER, fade));
+                1.0f, RenderUtil.withAlpha(Theme.border(), fade));
 
-        net.minecraft.client.renderer.GlStateManager.popMatrix();
+        drawTooltip(mouseX, mouseY);
+        GlStateManager.popMatrix();
     }
 
     private void drawBackground(float partialTicks) {
-        if (background == Background.BLUR && !blurUnavailable) {
-            if (applyBlur(partialTicks)) {
-                return;
-            }
+        if (background == Background.BLUR && !blurUnavailable && applyBlur(partialTicks)) {
+            return;
         }
         if (background == Background.GRADIENT) {
-            drawGradientRect(0, 0, width, height, 0x70101014, 0xC0050506);
+            drawGradientRect(0, 0, width, height, 0x60000000, 0xB0000000);
         } else {
-            RenderUtil.rect(0, 0, width, height, Theme.BACKDROP);
+            RenderUtil.rect(0, 0, width, height, Theme.backdrop());
         }
     }
 
     /**
      * Runs the vanilla blur post-process over the frame behind the window.
      *
-     * @return true if the blur ran; false means the caller should draw a plain backdrop instead
+     * @return true if the blur ran; false means draw a plain backdrop instead
      */
     private boolean applyBlur(float partialTicks) {
         if (!OpenGlHelper.isFramebufferEnabled()) {
@@ -201,13 +208,13 @@ public class ClickGui extends GuiScreen {
                 blur.createBindFramebuffers(mc.displayWidth, mc.displayHeight);
             }
             blur.loadShaderGroup(partialTicks);
-            // Framebuffer work leaves the GL state set up for the pass, not for our 2D drawing.
-            net.minecraft.client.renderer.GlStateManager.enableAlpha();
-            net.minecraft.client.renderer.GlStateManager.enableBlend();
-            net.minecraft.client.renderer.GlStateManager.color(1.0f, 1.0f, 1.0f, 1.0f);
+            // Framebuffer work leaves GL set up for the pass, not for our 2D drawing.
+            GlStateManager.enableAlpha();
+            GlStateManager.enableBlend();
+            GlStateManager.color(1.0f, 1.0f, 1.0f, 1.0f);
             return true;
         } catch (Throwable failure) {
-            // Shader support varies wildly across drivers. Stop trying and use the plain backdrop.
+            // Driver support for this varies too much to assume. Stop trying.
             blurUnavailable = true;
             blur = null;
             Vantage.LOGGER.warn("Background blur unavailable on this driver; using a plain backdrop", failure);
@@ -218,113 +225,135 @@ public class ClickGui extends GuiScreen {
     private void drawRail(int mouseX, int mouseY, int fade) {
         float railX = windowX();
         float railY = windowY();
-        RenderUtil.roundedRect(railX, railY, RAIL_WIDTH, WINDOW_HEIGHT, Theme.PANEL_RADIUS,
-                RenderUtil.withAlpha(Theme.RAIL, fade));
-        // Square off the rail's right edge so it meets the content area cleanly.
-        RenderUtil.rect(railX + RAIL_WIDTH - Theme.PANEL_RADIUS, railY, Theme.PANEL_RADIUS, WINDOW_HEIGHT,
-                RenderUtil.withAlpha(Theme.RAIL, fade));
 
-        Fonts.TITLE.drawString("Vantage", railX + 11.0f, railY + 13.0f, RenderUtil.withAlpha(Theme.TEXT, fade));
-        Fonts.TINY.drawString("v" + Vantage.VERSION, railX + 12.0f, railY + 30.0f,
-                RenderUtil.withAlpha(Theme.TEXT_FAINT, fade));
+        RenderUtil.roundedRect(railX, railY, RAIL_WIDTH, WINDOW_HEIGHT, Theme.PANEL_RADIUS,
+                RenderUtil.withAlpha(Theme.rail(), fade));
+        // Square off the inner edge so the rail meets the content area cleanly.
+        RenderUtil.rect(railX + RAIL_WIDTH - Theme.PANEL_RADIUS, railY, (float) Theme.PANEL_RADIUS,
+                WINDOW_HEIGHT, RenderUtil.withAlpha(Theme.rail(), fade));
+
+        Fonts.TITLE.drawString("Vantage", railX + PAD, railY + PAD + 1.0f,
+                RenderUtil.withAlpha(Theme.text(), fade));
+        Fonts.TINY.drawString("v" + Vantage.VERSION, railX + PAD + 1.0f, railY + PAD + 14.0f,
+                RenderUtil.withAlpha(Theme.textFaint(), fade));
 
         Category[] categories = Category.values();
-        float itemHeight = 27.0f;
-        float firstY = railY + HEADER_HEIGHT + 8.0f;
-
         int selectedIndex = 0;
         for (int i = 0; i < categories.length; i++) {
             if (categories[i] == selected) {
                 selectedIndex = i;
             }
         }
+
         railIndicator.setTarget(selectedIndex);
-        float indicatorY = firstY + (float) (railIndicator.get() * itemHeight);
-        RenderUtil.roundedRect(railX + 6.0f, indicatorY, RAIL_WIDTH - 12.0f, itemHeight - 3.0f, 4.0,
-                RenderUtil.withAlpha(Theme.accentDim(), fade));
-        RenderUtil.roundedRect(railX + 6.0f, indicatorY + 5.0f, 2.0f, itemHeight - 13.0f, 1.0,
-                RenderUtil.withAlpha(Theme.accent(), fade));
+        float indicatorY = categoryTop() + (float) (railIndicator.get() * CATEGORY_HEIGHT);
+        RenderUtil.roundedRect(railX + Theme.UNIT, indicatorY, RAIL_WIDTH - Theme.UNIT * 2.0f,
+                CATEGORY_HEIGHT - 2.0f, Theme.ROW_RADIUS, RenderUtil.withAlpha(Theme.accentDim(), fade));
+        RenderUtil.roundedRect(railX + Theme.UNIT, indicatorY + 5.0f, 2.0f, CATEGORY_HEIGHT - 12.0f,
+                1.0, RenderUtil.withAlpha(Theme.accent(), fade));
 
         for (int i = 0; i < categories.length; i++) {
             Category category = categories[i];
-            float itemY = firstY + i * itemHeight;
-            boolean hovered = mouseX >= railX + 6 && mouseX <= railX + RAIL_WIDTH - 6
-                    && mouseY >= itemY && mouseY <= itemY + itemHeight - 3;
-            int colour = category == selected ? Theme.accent() : (hovered ? Theme.TEXT : Theme.TEXT_MUTED);
-            Fonts.SMALL.drawString(category.getDisplayName(), railX + 14.0f, itemY + 7.0f,
+            float itemY = categoryTop() + i * CATEGORY_HEIGHT;
+            boolean hovered = mouseX >= railX + Theme.UNIT && mouseX <= railX + RAIL_WIDTH - Theme.UNIT
+                    && mouseY >= itemY && mouseY <= itemY + CATEGORY_HEIGHT - 2.0f;
+            int colour = category == selected ? Theme.accent() : (hovered ? Theme.text() : Theme.textMuted());
+            Fonts.SMALL.drawString(category.getDisplayName(), railX + Theme.UNIT * 3.0f,
+                    itemY + (CATEGORY_HEIGHT - 2.0f - Fonts.SMALL.getHeight()) / 2.0f,
                     RenderUtil.withAlpha(colour, fade));
         }
     }
 
-    private void drawHeader(int mouseX, int mouseY, int fade) {
-        float headerX = contentX();
-        float headerY = windowY() + 11.0f;
-        float fieldWidth = contentWidth();
+    private void drawSearch(int mouseX, int mouseY, int fade) {
+        float searchX = contentX();
+        float searchY = windowY() + PAD;
+        float fieldWidth = contentWidth() + SCROLLBAR_WIDTH + Theme.UNIT;
 
-        float textY = headerY + (SEARCH_HEIGHT - Fonts.SMALL.getHeight()) / 2.0f;
-        RenderUtil.roundedRect(headerX, headerY, fieldWidth, SEARCH_HEIGHT, 5.0,
-                RenderUtil.withAlpha(0xFF101216, fade));
-        RenderUtil.roundedOutline(headerX, headerY, fieldWidth, SEARCH_HEIGHT, 5.0, 1.0f,
-                RenderUtil.withAlpha(searchFocused ? Theme.accent() : Theme.BORDER, fade));
+        RenderUtil.roundedRect(searchX, searchY, fieldWidth, SEARCH_HEIGHT, Theme.ROW_RADIUS,
+                RenderUtil.withAlpha(Theme.row(), fade));
+        if (searchFocused) {
+            RenderUtil.roundedOutline(searchX, searchY, fieldWidth, SEARCH_HEIGHT, Theme.ROW_RADIUS,
+                    1.0f, RenderUtil.withAlpha(Theme.accent(), fade));
+        }
 
+        float textY = searchY + (SEARCH_HEIGHT - Fonts.SMALL.getHeight()) / 2.0f;
         if (search.isEmpty() && !searchFocused) {
-            Fonts.SMALL.drawString("Search modules", headerX + 8.0f, textY,
-                    RenderUtil.withAlpha(Theme.TEXT_FAINT, fade));
+            Fonts.SMALL.drawString("Search", searchX + Theme.UNIT * 1.5f, textY,
+                    RenderUtil.withAlpha(Theme.textFaint(), fade));
         } else {
-            float endX = Fonts.SMALL.drawString(search, headerX + 8.0f, textY,
-                    RenderUtil.withAlpha(Theme.TEXT, fade));
+            float endX = Fonts.SMALL.drawString(search, searchX + Theme.UNIT * 1.5f, textY,
+                    RenderUtil.withAlpha(Theme.text(), fade));
             if (searchFocused && (System.currentTimeMillis() / 500) % 2 == 0) {
                 RenderUtil.rect(endX + 1.0f, textY, 0.8f, Fonts.SMALL.getHeight() - 2.0f,
                         RenderUtil.withAlpha(Theme.accent(), fade));
             }
         }
-
-        String hint = search.trim().isEmpty() ? selected.getDescription() : visibleRows().size() + " matching";
-        Fonts.TINY.drawRightAligned(hint, headerX + fieldWidth - 2.0f, headerY + SEARCH_HEIGHT + 3.0f,
-                RenderUtil.withAlpha(Theme.TEXT_FAINT, fade));
     }
 
     private void drawModules(int mouseX, int mouseY) {
         List<ModuleRow> rows = visibleRows();
 
-        RenderUtil.beginScissor(contentX(), contentY(), contentWidth() + SCROLLBAR_WIDTH + 3.0f, contentHeight());
+        RenderUtil.beginScissor(contentX(), contentY(),
+                contentWidth() + SCROLLBAR_WIDTH + Theme.UNIT, contentHeight());
 
         float offset = (float) scroll.get();
         float cursor = contentY() - offset;
-        float gap = 4.0f;
 
         for (ModuleRow row : rows) {
             float rowHeight = row.getHeight();
             // Bounds are set even for rows that are not drawn, so one scrolled out of view cannot
-            // keep stale coordinates from an earlier frame and swallow a click meant for another.
+            // keep stale coordinates and swallow a click meant for another row.
             row.setBounds(contentX(), cursor, contentWidth());
             if (cursor + rowHeight >= contentY() - 4.0f && cursor <= contentY() + contentHeight() + 4.0f) {
                 row.render(mouseX, mouseY);
             }
-            cursor += rowHeight + gap;
+            cursor += rowHeight + ROW_GAP;
         }
 
-        float totalHeight = cursor + offset - contentY();
-        contentOverflow = Math.max(0.0f, totalHeight - contentHeight());
+        contentOverflow = Math.max(0.0f, (cursor + offset - contentY()) - contentHeight());
 
         if (rows.isEmpty()) {
-            Fonts.SMALL.drawCentred("Nothing here yet", contentX() + contentWidth() / 2.0f,
-                    contentY() + contentHeight() / 2.0f - 8.0f, Theme.TEXT_FAINT);
+            Fonts.SMALL.drawCentred("Nothing here", contentX() + contentWidth() / 2.0f,
+                    contentY() + contentHeight() / 2.0f - 6.0f, Theme.textFaint());
         }
-
         RenderUtil.endScissor();
 
         if (contentOverflow > 1.0f) {
-            float trackX = contentX() + contentWidth() + 4.0f;
+            float trackX = contentX() + contentWidth() + Theme.UNIT;
             float visibleFraction = contentHeight() / (contentHeight() + contentOverflow);
-            float thumbHeight = Math.max(18.0f, contentHeight() * visibleFraction);
+            float thumbHeight = Math.max(16.0f, contentHeight() * visibleFraction);
             float travel = contentHeight() - thumbHeight;
             float thumbY = contentY() + travel * (offset / contentOverflow);
-            RenderUtil.roundedRect(trackX, contentY(), SCROLLBAR_WIDTH, contentHeight(),
-                    SCROLLBAR_WIDTH / 2.0, 0x18FFFFFF);
             RenderUtil.roundedRect(trackX, thumbY, SCROLLBAR_WIDTH, thumbHeight,
-                    SCROLLBAR_WIDTH / 2.0, RenderUtil.withAlpha(Theme.accent(), 0.75f));
+                    SCROLLBAR_WIDTH / 2.0, RenderUtil.withAlpha(Theme.accent(), 0.6f));
         }
+    }
+
+    /** Descriptions live here rather than on every row, so the list stays a list. */
+    private void drawTooltip(int mouseX, int mouseY) {
+        ModuleRow target = null;
+        for (ModuleRow row : visibleRows()) {
+            if (row.wantsTooltip()) {
+                target = row;
+                break;
+            }
+        }
+        if (target == null) {
+            return;
+        }
+        String text = target.getTooltip();
+        float textWidth = Fonts.TINY.getWidth(text);
+        float boxWidth = textWidth + Theme.UNIT * 3.0f;
+        float boxHeight = Fonts.TINY.getHeight() + Theme.UNIT * 1.5f;
+
+        // Keep it on screen rather than letting it run off the right edge.
+        float boxX = Math.min(mouseX + 9.0f, width - boxWidth - 2.0f);
+        float boxY = Math.min(mouseY + 9.0f, height - boxHeight - 2.0f);
+
+        RenderUtil.shadow(boxX, boxY, boxWidth, boxHeight, Theme.CHIP_RADIUS, 4, 0x80000000);
+        RenderUtil.roundedRect(boxX, boxY, boxWidth, boxHeight, Theme.CHIP_RADIUS, Theme.rail());
+        RenderUtil.roundedOutline(boxX, boxY, boxWidth, boxHeight, Theme.CHIP_RADIUS, 1.0f, Theme.border());
+        Fonts.TINY.drawString(text, boxX + Theme.UNIT * 1.5f, boxY + Theme.UNIT * 0.75f, Theme.textMuted());
     }
 
     // -- input ------------------------------------------------------------------------------
@@ -336,17 +365,8 @@ public class ClickGui extends GuiScreen {
         if (wheel == 0) {
             return;
         }
-        scrollTarget -= Math.signum(wheel) * 32.0f;
-        clampScroll();
-    }
-
-    private void clampScroll() {
-        if (scrollTarget < 0.0f) {
-            scrollTarget = 0.0f;
-        }
-        if (scrollTarget > contentOverflow) {
-            scrollTarget = contentOverflow;
-        }
+        scrollTarget -= Math.signum(wheel) * (ModuleRow.HEADER_HEIGHT + ROW_GAP) * 2.0f;
+        scrollTarget = Math.max(0.0f, Math.min(scrollTarget, contentOverflow));
         scroll.setTarget(scrollTarget);
     }
 
@@ -354,9 +374,9 @@ public class ClickGui extends GuiScreen {
     protected void mouseClicked(int mouseX, int mouseY, int mouseButton) throws java.io.IOException {
         super.mouseClicked(mouseX, mouseY, mouseButton);
 
-        float headerY = windowY() + 11.0f;
+        float searchY = windowY() + PAD;
         boolean onSearch = mouseX >= contentX() && mouseX <= contentX() + contentWidth()
-                && mouseY >= headerY && mouseY <= headerY + SEARCH_HEIGHT;
+                && mouseY >= searchY && mouseY <= searchY + SEARCH_HEIGHT;
         if (mouseButton == 0) {
             searchFocused = onSearch;
         }
@@ -367,13 +387,11 @@ public class ClickGui extends GuiScreen {
             return;
         }
 
-        // Rail.
         Category[] categories = Category.values();
-        float firstY = windowY() + HEADER_HEIGHT + 8.0f;
         for (int i = 0; i < categories.length; i++) {
-            float itemY = firstY + i * 27.0f;
-            if (mouseX >= windowX() + 6 && mouseX <= windowX() + RAIL_WIDTH - 6
-                    && mouseY >= itemY && mouseY <= itemY + 24.0f) {
+            float itemY = categoryTop() + i * CATEGORY_HEIGHT;
+            if (mouseX >= windowX() + Theme.UNIT && mouseX <= windowX() + RAIL_WIDTH - Theme.UNIT
+                    && mouseY >= itemY && mouseY <= itemY + CATEGORY_HEIGHT - 2.0f) {
                 if (selected != categories[i]) {
                     selected = categories[i];
                     scrollTarget = 0.0f;
@@ -383,7 +401,7 @@ public class ClickGui extends GuiScreen {
             }
         }
 
-        // Modules, but only clicks that land inside the scroll viewport.
+        // Only clicks inside the scroll viewport reach the module list.
         if (mouseY < contentY() || mouseY > contentY() + contentHeight()) {
             return;
         }
@@ -404,8 +422,8 @@ public class ClickGui extends GuiScreen {
 
     @Override
     protected void keyTyped(char typedCharacter, int keyCode) throws java.io.IOException {
-        // A component that is capturing input gets first refusal, so typing an API key or binding
-        // a key cannot be swallowed by the screen's own shortcuts.
+        // A component capturing input gets first refusal, so typing an API key or binding a key
+        // cannot be swallowed by the screen's own shortcuts.
         for (ModuleRow row : visibleRows()) {
             if (row.isCapturingInput() && row.keyTyped(typedCharacter, keyCode)) {
                 return;
@@ -426,7 +444,6 @@ public class ClickGui extends GuiScreen {
             }
             if (typedCharacter >= 32 && typedCharacter != 127) {
                 search += typedCharacter;
-                return;
             }
             return;
         }
@@ -439,7 +456,6 @@ public class ClickGui extends GuiScreen {
         super.keyTyped(typedCharacter, keyCode);
     }
 
-    /** Collapses every open module, used when reopening so the list starts tidy. */
     public void collapseAll() {
         for (ModuleRow row : allRows) {
             row.collapse();

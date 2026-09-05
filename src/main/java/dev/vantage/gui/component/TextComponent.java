@@ -15,8 +15,8 @@ import org.lwjgl.input.Keyboard;
  */
 public class TextComponent extends SettingComponent {
 
-    private static final float FIELD_HEIGHT = 14.0f;
-    private static final float ROW = 27.0f;
+    private static final float FIELD_HEIGHT = 13.0f;
+    private static final float ROW = 24.0f;
 
     private final StringSetting typed;
     private boolean focused;
@@ -37,26 +37,26 @@ public class TextComponent extends SettingComponent {
     }
 
     private float fieldY() {
-        return y + 11.0f;
+        return y + 10.0f;
     }
 
     @Override
     public void render(float mouseX, float mouseY) {
-        Fonts.SMALL.drawString(typed.getName(), x + LABEL_INSET, y - 1.0f, Theme.TEXT_MUTED);
+        Fonts.SMALL.drawString(typed.getName(), x + LABEL_INSET, y - 1.0f, Theme.textMuted());
 
         float fieldX = x + LABEL_INSET;
         float fieldWidth = width - LABEL_INSET * 2.0f;
         RenderUtil.roundedRect(fieldX, fieldY(), fieldWidth, FIELD_HEIGHT, 3.0, 0xFF101216);
         RenderUtil.roundedOutline(fieldX, fieldY(), fieldWidth, FIELD_HEIGHT, 3.0, 1.0f,
-                focused ? Theme.accent() : Theme.BORDER);
+                focused ? Theme.accent() : Theme.border());
 
         String display = displayText();
         float textY = fieldY() + 2.0f;
         if (display.isEmpty() && !focused) {
-            Fonts.SMALL.drawString(placeholder(), fieldX + 5.0f, textY, Theme.TEXT_FAINT);
+            Fonts.SMALL.drawString(placeholder(), fieldX + 5.0f, textY, Theme.textFaint());
         } else {
             String trimmed = Fonts.SMALL.trimToWidth(display, fieldWidth - 12.0f);
-            float endX = Fonts.SMALL.drawString(trimmed, fieldX + 5.0f, textY, Theme.TEXT);
+            float endX = Fonts.SMALL.drawString(trimmed, fieldX + 5.0f, textY, Theme.text());
             // Blink at roughly 1.5Hz, the rate that reads as a caret rather than a strobe.
             if (focused && (System.currentTimeMillis() / 500) % 2 == 0) {
                 RenderUtil.rect(endX + 1.0f, textY, 0.8f, Fonts.SMALL.getHeight() - 3.0f, Theme.accent());

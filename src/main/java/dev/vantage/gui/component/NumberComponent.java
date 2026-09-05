@@ -14,8 +14,8 @@ import dev.vantage.setting.NumberSetting;
  */
 public class NumberComponent extends SettingComponent {
 
-    private static final float TRACK_HEIGHT = 2.5f;
-    private static final float ROW = 22.0f;
+    private static final float TRACK_HEIGHT = 2.0f;
+    private static final float ROW = 19.0f;
 
     private final NumberSetting typed;
     private final Animated fill;
@@ -47,10 +47,10 @@ public class NumberComponent extends SettingComponent {
             typed.setFraction((mouseX - trackX()) / trackWidth());
         }
 
-        Fonts.SMALL.drawString(typed.getName(), x + LABEL_INSET, y + 1.0f, Theme.TEXT_MUTED);
-        Fonts.SMALL.drawRightAligned(formatValue(), x + width - LABEL_INSET, y + 1.0f, Theme.TEXT);
+        Fonts.SMALL.drawString(typed.getName(), x + LABEL_INSET, y + 1.0f, Theme.textMuted());
+        Fonts.SMALL.drawRightAligned(formatValue(), x + width - LABEL_INSET, y + 1.0f, Theme.text());
 
-        float trackY = y + ROW - TRACK_HEIGHT - 5.0f;
+        float trackY = y + ROW - TRACK_HEIGHT - 4.0f;
         RenderUtil.roundedRect(trackX(), trackY, trackWidth(), TRACK_HEIGHT, TRACK_HEIGHT / 2.0, 0xFF2A2E36);
 
         fill.setTarget(typed.getFraction());
@@ -61,7 +61,7 @@ public class NumberComponent extends SettingComponent {
         }
 
         boolean nearTrack = isHovered(mouseX, mouseY, ROW);
-        float knobRadius = dragging ? 4.0f : (nearTrack ? 3.5f : 3.0f);
+        float knobRadius = dragging ? 3.5f : (nearTrack ? 3.0f : 2.5f);
         RenderUtil.circle(trackX() + filledWidth, trackY + TRACK_HEIGHT / 2.0f, knobRadius, 0xFFFFFFFF);
     }
 

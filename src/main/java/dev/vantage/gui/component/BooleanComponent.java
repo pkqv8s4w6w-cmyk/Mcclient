@@ -9,8 +9,8 @@ import dev.vantage.setting.BooleanSetting;
 /** A sliding switch. The knob and the track colour animate together. */
 public class BooleanComponent extends SettingComponent {
 
-    private static final float TRACK_WIDTH = 18.0f;
-    private static final float TRACK_HEIGHT = 9.0f;
+    private static final float TRACK_WIDTH = 16.0f;
+    private static final float TRACK_HEIGHT = 8.0f;
 
     private final BooleanSetting typed;
     private final Animated knob;
@@ -34,7 +34,7 @@ public class BooleanComponent extends SettingComponent {
         }
 
         Fonts.SMALL.drawString(typed.getName(), x + LABEL_INSET, y + 2.0f,
-                typed.value() ? Theme.TEXT : Theme.TEXT_MUTED);
+                typed.value() ? Theme.text() : Theme.textMuted());
 
         knob.setTarget(typed.value() ? 1.0 : 0.0);
         double progress = knob.get();
@@ -47,7 +47,7 @@ public class BooleanComponent extends SettingComponent {
 
         float travel = TRACK_WIDTH - TRACK_HEIGHT;
         float knobX = trackX + TRACK_HEIGHT / 2.0f + (float) (travel * progress);
-        RenderUtil.circle(knobX, trackY + TRACK_HEIGHT / 2.0f, TRACK_HEIGHT / 2.0f - 1.5f, 0xFFFFFFFF);
+        RenderUtil.circle(knobX, trackY + TRACK_HEIGHT / 2.0f, TRACK_HEIGHT / 2.0f - 1.3f, 0xFFFFFFFF);
     }
 
     @Override

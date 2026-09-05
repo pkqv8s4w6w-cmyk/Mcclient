@@ -61,6 +61,6 @@ public class CpsHud extends HudModule {
 
     @Override
     protected void renderContent() {
-        Fonts.SMALL.drawString(text(), 0.0f, 0.0f, Theme.TEXT);
+        Fonts.SMALL.drawString(text(), 0.0f, 0.0f, Theme.text());
     }
 }

@@ -216,10 +216,10 @@ public class ThreatListHud extends HudModule {
         float y = 0.0f;
 
         if (showHeader.value()) {
-            Fonts.SMALL_BOLD.drawString("THREAT", 0.0f, 0.0f, Theme.TEXT);
+            Fonts.SMALL_BOLD.drawString("THREAT", 0.0f, 0.0f, Theme.text());
             String count = rowsShown + (rowsShown == 1 ? " player" : " players");
-            Fonts.TINY.drawRightAligned(count, measuredWidth, 1.0f, Theme.TEXT_FAINT);
-            RenderUtil.rect(0.0f, HEADER_HEIGHT - 3.0f, measuredWidth, 0.5f, Theme.DIVIDER);
+            Fonts.TINY.drawRightAligned(count, measuredWidth, 1.0f, Theme.textFaint());
+            RenderUtil.rect(0.0f, HEADER_HEIGHT - 3.0f, measuredWidth, 0.5f, Theme.divider());
             y += HEADER_HEIGHT;
         }
 
@@ -227,7 +227,7 @@ public class ThreatListHud extends HudModule {
         if (entries.isEmpty()) {
             String status = tracker.getStatusMessage();
             Fonts.SMALL.drawString(status == null ? "Waiting for players" : status, 0.0f, y,
-                    status == null ? Theme.TEXT_FAINT : Theme.WARNING);
+                    status == null ? Theme.textFaint() : Theme.warning());
             return;
         }
 
@@ -258,28 +258,28 @@ public class ThreatListHud extends HudModule {
         // An unresolved player is dimmed, so a name with no stats behind it is obvious.
         boolean flagged = markDetections.value() && Flagged.is(entry.getName());
         int nameColour = flagged
-                ? Theme.DANGER
-                : (entry.isStatsCounted() ? Theme.TEXT : Theme.TEXT_MUTED);
+                ? Theme.danger()
+                : (entry.isStatsCounted() ? Theme.text() : Theme.textMuted());
         Fonts.SMALL.drawString(entry.getName(), x, y, nameColour);
         if (flagged) {
             // A dot as well as the colour, so the mark survives a colour-blind reading.
-            RenderUtil.circle(x + nameColumn + 3.0f, y + ROW_HEIGHT / 2.0f - 1.0f, 1.6f, Theme.DANGER);
+            RenderUtil.circle(x + nameColumn + 3.0f, y + ROW_HEIGHT / 2.0f - 1.0f, 1.6f, Theme.danger());
         }
         x += nameColumn;
 
         if (ratioColumn > 0.0f) {
             x += COLUMN_GAP;
-            Fonts.SMALL.drawString(ratioText(entry), x, y, Theme.TEXT_MUTED);
+            Fonts.SMALL.drawString(ratioText(entry), x, y, Theme.textMuted());
             x += ratioColumn;
         }
         if (starColumn > 0.0f) {
             x += COLUMN_GAP;
-            Fonts.SMALL.drawString(starText(entry), x, y, Theme.TEXT_MUTED);
+            Fonts.SMALL.drawString(starText(entry), x, y, Theme.textMuted());
             x += starColumn;
         }
         if (gearColumn > 0.0f) {
             x += COLUMN_GAP;
-            Fonts.SMALL.drawString(entry.getInput().getGear().shorthand(), x, y, Theme.TEXT_FAINT);
+            Fonts.SMALL.drawString(entry.getInput().getGear().shorthand(), x, y, Theme.textFaint());
         }
     }
 

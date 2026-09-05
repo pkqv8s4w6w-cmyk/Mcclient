@@ -33,13 +33,13 @@ public class EnumComponent extends SettingComponent {
             RenderUtil.roundedRect(x, y, width, ROW_HEIGHT, 3.0, 0x0AFFFFFF);
         }
 
-        Fonts.SMALL.drawString(typed.getName(), x + LABEL_INSET, y + 2.0f, Theme.TEXT_MUTED);
+        Fonts.SMALL.drawString(typed.getName(), x + LABEL_INSET, y + 2.0f, Theme.textMuted());
 
         String value = typed.currentLabel();
         float right = x + width - LABEL_INSET;
         // A caret hints that the value is clickable rather than just a readout.
-        Fonts.TINY.drawRightAligned("▼", right, y + 3.5f, hovered ? Theme.accent() : Theme.TEXT_FAINT);
-        Fonts.SMALL.drawRightAligned(value, right - 8.0f, y + 2.0f, hovered ? Theme.TEXT : Theme.accent());
+        Fonts.TINY.drawRightAligned("▼", right, y + 3.5f, hovered ? Theme.accent() : Theme.textFaint());
+        Fonts.SMALL.drawRightAligned(value, right - 8.0f, y + 2.0f, hovered ? Theme.text() : Theme.accent());
     }
 
     @Override

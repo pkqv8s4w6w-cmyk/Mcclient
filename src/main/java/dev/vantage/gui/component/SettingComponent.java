@@ -17,8 +17,10 @@ import dev.vantage.setting.StringSetting;
  */
 public abstract class SettingComponent {
 
-    public static final float ROW_HEIGHT = 14.0f;
-    protected static final float LABEL_INSET = 10.0f;
+    public static final float ROW_HEIGHT = 13.0f;
+
+    /** Rows are already indented by their parent module, so this inset stays small. */
+    protected static final float LABEL_INSET = 5.0f;
 
     protected final Setting<?> setting;
 

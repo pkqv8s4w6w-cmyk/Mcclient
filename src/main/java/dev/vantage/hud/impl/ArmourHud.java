@@ -65,7 +65,7 @@ public class ArmourHud extends HudModule {
     protected void renderContent() {
         List<ItemStack> stacks = pieces();
         if (stacks.isEmpty()) {
-            Fonts.TINY.drawString("no armour", 0.0f, 4.0f, Theme.TEXT_FAINT);
+            Fonts.TINY.drawString("no armour", 0.0f, 4.0f, Theme.textFaint());
             return;
         }
 
