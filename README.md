@@ -14,12 +14,12 @@ servers.
 | Module | What it does |
 |---|---|
 | Threat List | Ranks the lobby 0–10, most dangerous at the top, from lifetime stats, current gear and how the game is going for them |
-| Cheat Detector | Watches other players for automated clicking, locked-on aim and long reach, and names the team and player in chat |
+| Cheat Detector | Nine checks across combat, movement and building. Names the team and player in chat, and flagged players go to the top of the threat list |
 
 **HUD** — Keystrokes, CPS, Info (fps / ping / coordinates / facing), Armour, Potions.
 All draggable, with alignment snapping and scroll-to-resize.
 
-**Utility and visual** — Zoom, Toggle Sprint, Fullbright.
+**Utility and visual** — Zoom, Toggle Sprint, Fullbright, Nick Hider.
 
 **Client** — ClickGUI, HUD Editor, Mods Manager.
 
@@ -53,10 +53,15 @@ are already configured:
 ## Getting started in game
 
 1. Press **Right Shift** to open the menu. Left click toggles a module, right click opens its
-   settings.
+   settings. Hovering a module shows what it does.
 2. Enable **Threat List** under Analysis, open its settings and paste a Hypixel API key from
    [developer.hypixel.net](https://developer.hypixel.net) into the masked field.
-3. Enable **HUD Editor** under Client to drag things where you want them.
+3. Press **Right Control** to open the HUD editor and drag things where you want them. Scroll over
+   an element to resize it.
+
+Every colour is customisable under **ClickGUI** in the Client category — accent, panel, rows, text
+and both ends of the threat gradient. The theme reads them live, so the client restyles while you
+are still dragging the picker.
 
 ### About the API key
 
@@ -67,20 +72,23 @@ not show on a stream or a screenshot.
 
 ## How the threat score works
 
-Three factors, blended with weights you can change in the module's settings:
+The scale is anchored at both ends. **0** is essentially their first game and you win that fight
+almost every time; **10** is ranked tier, a very high final kill ratio, and you very likely lose.
 
-- **Stats (45%)** — final kill/death ratio and Bedwars level, log-scaled. The gap between 2 and 6
-  FKDR matters far more than the gap between 20 and 40, and a linear scale would put almost every
-  real player in the bottom fifth of the range. Thin records are pulled toward a neutral score in
-  proportion to how thin they are: someone who is 5 and 0 has not proved anything yet.
-- **Gear (35%)** — armour and weapon tier plus enchantments, read from their entity. Armour is taken
-  from the best piece worn rather than the chestplate, because Bedwars upgrades only replace boots
-  and leggings.
-- **Momentum (20%)** — kills this game, and whether their bed is still standing. An intact bed means
-  every kill has to be taken again.
+- **Stats lead, at 55%.** Final kill/death ratio and Bedwars level, log-scaled, with FKDR
+  outweighing star four to one — star is mostly time played, FKDR is skill. The gap between 2 and 6
+  FKDR matters far more than the gap between 20 and 40, which is why it is not linear. Records too
+  thin to judge are pulled toward the bottom of the scale rather than the middle.
+- **Gear at 30%, but only when it can be seen.** Outside render distance gear is *unknown*, not
+  absent, and the factor drops out so stats carry the score. Treating unknown as none is what made
+  good players read as harmless.
+- **Bed and current form are small adjustments**, not co-equal terms: an intact bed is worth +0.3,
+  kills this game up to +1.2. As blended factors they dragged an excellent player with an untouched
+  bed and no kills yet down to about 8.5, which is backwards.
+- **A confirmed cheat flag floors the score at 9.5** and sorts that player above everyone.
 
-A nicked player drops the stats factor and is scored on gear and momentum instead of being counted
-as a zero, which would rank someone in full diamond below an empty-handed one.
+Six realistic player profiles are asserted as score bands in the test suite, so the calibration is
+checked on every build rather than discovered in a game.
 
 ## What the cheat detector can and cannot see
 
@@ -92,18 +100,30 @@ anticheat performs, such as finding the common divisor of raw rotation deltas, n
 unquantised floats that only the server receives. That signal is not available client-side at all,
 and a check built on it would be measuring rounding noise.
 
-What is implemented:
+Nine checks are implemented, grouped into three toggles:
 
-- **Autoclicker** — the tell is not a high click rate. People reach sixteen clicks a second by hand
-  and that is legitimate. What a hand cannot do is be consistent, so this measures the spread of
-  the gaps between clicks. Timing is read off the network pipeline, not entity state, because
-  entity state only updates once a tick and 50 ms resolution would round every interval to a
-  multiple of a tick.
-- **Aim assist** — large single-tick turns that land on a target, and a view that stays locked on
-  one through movement that should have disturbed it. Both survive the packet quantisation.
-- **Reach** — measured only for hits landed **on you**. For an attack between two other players the
-  client sees neither the attack nor the positions the server used, so any figure would be
-  guesswork dressed up as a measurement. The median is used, so one lag spike does not convict.
+**Combat** — *Autoclicker*: the tell is not a high rate, since people reach sixteen clicks a second
+by hand and that is legitimate. What a hand cannot do is be consistent, so this measures the spread
+of the gaps. Timing comes off the network pipeline, not entity state, which only updates once a tick.
+*Aim assist*: large single-tick turns that land on a target, and a view that stays locked on one
+through movement that should have disturbed it. *Reach*: measured only for hits landed on **you** —
+for an attack between two other players the client sees neither the attack nor the positions the
+server used. *Anti-knockback*: displacement after a hit, taken as a median, since being hit into a
+wall legitimately moves you almost nowhere.
+
+**Movement** — *Speed*, judged on the median tick rather than the fastest, because one long tick is
+a rubber-band. *Flight*, from runs of airborne ticks with no descent. *Jump height*, deliberately
+conservative since the client cannot see another player's potion effects. *Backwards sprinting*,
+which is impossible in vanilla 1.8 and so has almost no false-positive surface.
+
+**Scaffold** — placing blocks under yourself while walking backwards is how everyone crosses a gap,
+so rate alone would flag the whole lobby. The difference is where the player looks: bridging by hand
+means aiming down at the block, while a scaffold keeps the view level and forward because the
+placement is not coming from the view at all.
+
+Every movement check discards any pair of samples where either end was teleported. Positions arrive
+quantised to 1/32 of a block and a server reposition resets them, so differencing across one reads
+as impossible speed — the largest source of false positives in movement detection, ahead of latency.
 
 **Backtrack is not detectable from a client** and is not implemented. It is a property of the
 attacker's packet timing against the server, which a third-party client never sees.
@@ -143,10 +163,11 @@ never stop the game starting.
 ./gradlew test
 ```
 
-141 tests cover the parts that do not need a running game: threat scoring, Hypixel response parsing,
+194 tests cover the parts that do not need a running game: threat scoring, Hypixel response parsing,
 rate limiting and caching, scoreboard and death-message parsing, HUD snapping, config round-trips,
-and the detection heuristics — including sequences built to look human and to look automated, and a
-check that packet quantisation alone never reads as cheating.
+and the detection heuristics — including sequences built to look human and to look automated, a
+check that packet quantisation alone never reads as cheating, and six player profiles asserted as
+threat score bands.
 
 Anything Minecraft-facing has to be checked in game. `Module`, `Setting`, `ConfigManager`, the
 threat engine, the detection analyses and the Hypixel client deliberately import nothing from
