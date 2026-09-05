@@ -12,6 +12,7 @@ import dev.vantage.module.impl.analysis.CheatDetectorModule;
 import dev.vantage.module.impl.client.ClickGuiModule;
 import dev.vantage.module.impl.client.HudEditorModule;
 import dev.vantage.module.impl.client.ModsManagerModule;
+import dev.vantage.module.impl.combat.BacktrackModule;
 import dev.vantage.module.impl.utility.NickHiderModule;
 import dev.vantage.module.impl.utility.ToggleSprintModule;
 import dev.vantage.module.impl.utility.ZoomModule;
@@ -31,8 +32,14 @@ import java.nio.file.Path;
 /**
  * Entry point for the Vantage client.
  *
- * <p>Vantage is an information client: it surfaces what is already on your screen and in the
- * public Hypixel API more clearly than vanilla does. It does not automate combat.
+ * <p>Vantage is mostly an information client: it surfaces what is already on your screen and in the
+ * public Hypixel API more clearly than vanilla does.
+ *
+ * <p>The exception is {@code BacktrackModule}, which holds other players' movement packets back so
+ * they can be hit where they were. That is a combat advantage and servers ban for it, so the build
+ * it is in belongs on a private server and nowhere else. Nothing here automates combat - Backtrack
+ * delays packets and leaves the aiming and clicking to you - but the distinction matters to how it
+ * plays, not to whether a server allows it.
  */
 @Mod(modid = Vantage.MOD_ID, name = Vantage.MOD_NAME, version = Vantage.VERSION, clientSideOnly = true)
 public class Vantage {
@@ -96,6 +103,8 @@ public class Vantage {
                 // Analysis
                 new ThreatListHud(),
                 new CheatDetectorModule(),
+                // Combat
+                new BacktrackModule(),
                 // HUD
                 new KeystrokesHud(),
                 new CpsHud(),

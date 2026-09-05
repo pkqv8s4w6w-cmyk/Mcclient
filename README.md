@@ -1,11 +1,13 @@
 # Vantage
 
-A Minecraft 1.8.9 Forge client built around information rather than mechanical advantage: a threat
-ranking overlay driven by the Hypixel API, a client-side cheat detector, a clean ClickGUI, and a set
-of quality-of-life modules.
+A Minecraft 1.8.9 Forge client: a threat ranking overlay driven by the Hypixel API, a client-side
+cheat detector, a clean ClickGUI, a set of quality-of-life modules, and one combat module.
 
-Everything here is the kind of thing Hypixel permits outright, so it is not limited to private
-servers.
+**This build is for a private server.** Everything here except Backtrack is the kind of thing
+Hypixel permits outright, and used to be the whole point of the project. Backtrack is not — it is a
+combat advantage, public servers ban for it, and its presence in the jar is what makes the jar
+unsafe to run on one. It is in here because the client is used on a whitelisted server where the
+people being hit know it is there. That is the only setting it belongs in.
 
 ## What is in it
 
@@ -16,6 +18,12 @@ servers.
 | Threat List | Ranks everyone in your game 0–10, most dangerous at the top, with their team colour, final kill ratio, star and current gear |
 | Cheat Detector | Nine checks across combat, movement and building. Names the team and player in chat, and flagged players go to the top of the threat list |
 
+**Combat**
+
+| Module | What it does |
+|---|---|
+| Backtrack | Holds nearby players' movement packets back for a set time, so you hit them where they were rather than where they are |
+
 **HUD** — Keystrokes, CPS, Info (fps / ping / coordinates / facing), Armour, Potions.
 All draggable, with alignment snapping and scroll-to-resize.
 
@@ -25,9 +33,9 @@ All draggable, with alignment snapping and scroll-to-resize.
 
 ## What is deliberately not in it
 
-No killaura, reach, backtrack, aim assist, autoclicker, fast place, or ESP. Those exist to beat
-other players by mechanical advantage and are out of scope for this project. The module system is a
-plain abstract class, so the codebase does not stop anyone adding their own.
+No killaura, reach, aim assist, autoclicker, fast place, or ESP. Backtrack changes where a player
+is; none of those change where *you* aim or when you click, and that line is where this stops. The
+module system is a plain abstract class, so the codebase does not stop anyone adding their own.
 
 ## Building
 
@@ -98,6 +106,52 @@ participants, so nothing further needs filtering.
 **Detail** controls how much of each player is shown — score and name, plus their stats, or the full
 row with team and gear. Names carry their team's colour throughout.
 
+## How Backtrack works
+
+It uses a gap vanilla leaves open. A server accepts a melee hit whenever the attacker is within
+**six** blocks of the target — `NetHandlerPlayServer.processUseEntity` checks
+`getDistanceSqToEntity < 36.0` — but your client only traces for a target out to **three**. The top
+half of that window is unreachable in normal play.
+
+Holding a player's position packets back closes it. Their entity keeps the coordinates it had a
+moment ago, so the model and its bounding box sit where they were; the crosshair trace hits that
+stale box; and the attack packet that follows carries nothing but an entity id. The server checks
+its own current positions, finds you inside six blocks, and counts the hit.
+
+So nothing in the module spoofs a rotation, redirects an attack, or invents a position. It holds
+three packet types — relative movement, teleports and head look — and vanilla does the rest. That
+is also why there is nothing extra drawn on screen: the player model *is* the indicator, because
+the stale position is where the model genuinely is.
+
+| Setting | Default | What it does |
+|---|---|---|
+| Delay | 200ms | How far behind their real position nearby players are held |
+| Min Distance | 0m | Players closer than this are left alone; you can already hit them |
+| Max Distance | 5m | Players further than this are left alone; past six the server refuses the hit anyway |
+| Release On Hurt | on | Hands back everything held the moment you take a hit |
+
+Distances are measured centre to centre, the same way the server measures the six-block limit, so
+the sliders mean the same thing that check does.
+
+A held player is not frozen. Once the queue fills, packets come out at the rate they go in, leaving
+that player a constant distance behind rather than stopped — so someone running away still reads as
+leaving the band and holding stops on its own.
+
+**Nothing addressed to you is ever held.** That is checked against your own entity id in
+`PacketDelayer`, not left to the module's target list, because delaying your own velocity packets
+delays your own knockback — the most obvious tell there is, and the thing server-side anticheats
+actually punish.
+
+Packets are never dropped, only deferred. 1.8.9 movement is mostly *relative* — `S14PacketEntity`
+says "move that player 0.3 east", not "that player is here" — so a lost or reordered packet leaves
+that player permanently offset from where the server has them. `HeldPacketQueue` keeps release times
+monotonic and releases early rather than discarding when it fills; those rules are what the unit
+tests cover.
+
+The Cheat Detector is told which players are being held, and marks their movement samples the same
+way it marks a server teleport, so this client's own delaying does not read as the other player
+flying.
+
 ## What the cheat detector can and cannot see
 
 Worth being precise, because clients often claim more than they can deliver.
@@ -133,8 +187,10 @@ Every movement check discards any pair of samples where either end was teleporte
 quantised to 1/32 of a block and a server reposition resets them, so differencing across one reads
 as impossible speed — the largest source of false positives in movement detection, ahead of latency.
 
-**Backtrack is not detectable from a client** and is not implemented. It is a property of the
-attacker's packet timing against the server, which a third-party client never sees.
+**Backtrack is not detectable from a client**, so there is no check for it. It is a property of the
+attacker's packet timing against the server, which a third-party client never sees. This client now
+ships a Backtrack module itself, which changes nothing here — using one and spotting someone else
+using one are unrelated problems, and only the second is impossible.
 
 Thresholds scale with the watched player's latency, which is the largest single source of wrong
 answers. Every verdict carries a confidence and is a heuristic, not an accusation.
@@ -171,16 +227,21 @@ never stop the game starting.
 ./gradlew test
 ```
 
-194 tests cover the parts that do not need a running game: threat scoring, Hypixel response parsing,
+207 tests cover the parts that do not need a running game: threat scoring, Hypixel response parsing,
 rate limiting and caching, scoreboard and death-message parsing, HUD snapping, config round-trips,
-and the detection heuristics — including sequences built to look human and to look automated, a
-check that packet quantisation alone never reads as cheating, and six player profiles asserted as
-threat score bands.
+Backtrack's packet ordering rules, and the detection heuristics — including sequences built to look
+human and to look automated, a check that packet quantisation alone never reads as cheating, and six
+player profiles asserted as threat score bands.
 
 Anything Minecraft-facing has to be checked in game. `Module`, `Setting`, `ConfigManager`, the
-threat engine, the detection analyses and the Hypixel client deliberately import nothing from
-Minecraft, which is what makes that split possible; `ModuleManager` owns the Forge subscriptions
-and fans events out.
+threat engine, the detection analyses, the Hypixel client and `HeldPacketQueue` deliberately import
+nothing from Minecraft, which is what makes that split possible; `ModuleManager` owns the Forge
+subscriptions and fans events out.
+
+Backtrack is split along that same line on purpose. The ordering rules that matter — never reorder,
+never drop, forget the old schedule after a flush — live in `HeldPacketQueue` and are tested against
+a fake clock, because they are the part where a mistake shows up as a player stuck in the wrong
+place rather than as anything obvious. `PacketDelayer` holds only the Netty plumbing.
 
 ### Adding a module
 
