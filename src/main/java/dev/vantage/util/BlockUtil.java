@@ -7,6 +7,9 @@ import net.minecraft.block.BlockContainer;
 import net.minecraft.block.BlockLiquid;
 import net.minecraft.block.BlockWorkbench;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.entity.EntityPlayerSP;
+import net.minecraft.item.ItemStack;
+import net.minecraft.network.play.client.C0APacketAnimation;
 import net.minecraft.util.BlockPos;
 import net.minecraft.util.EnumFacing;
 import net.minecraft.util.Vec3;
@@ -103,5 +106,35 @@ public final class BlockUtil {
                 pos.getX() + 0.5 + face.getFrontOffsetX() * 0.49,
                 pos.getY() + 0.5 + face.getFrontOffsetY() * 0.49,
                 pos.getZ() + 0.5 + face.getFrontOffsetZ() * 0.49);
+    }
+
+    /**
+     * Places a block from a hotbar slot against a neighbour, holding the slot only for the moment
+     * of placing.
+     *
+     * @return whether the game accepted the placement
+     */
+    public static boolean place(final Placement placement, final int slot, final boolean visibleSwing) {
+        final Minecraft mc = Minecraft.getMinecraft();
+        final EntityPlayerSP player = mc.thePlayer;
+        final boolean[] placed = {false};
+        InventoryUtil.withSlot(slot, () -> {
+            ItemStack stack = player.inventory.getStackInSlot(slot);
+            if (mc.playerController.onPlayerRightClick(player, mc.theWorld, stack,
+                    placement.against, placement.face, placement.hitVec)) {
+                placed[0] = true;
+                if (visibleSwing) {
+                    player.swingItem();
+                } else {
+                    PacketUtil.send(new C0APacketAnimation());
+                }
+            }
+        });
+        return placed[0];
+    }
+
+    /** Distance from the player's eyes to a point, for reach checks. */
+    public static double eyeDistance(Vec3 point) {
+        return Minecraft.getMinecraft().thePlayer.getPositionEyes(1.0f).distanceTo(point);
     }
 }

@@ -34,8 +34,8 @@ public final class Simulation {
         /** Fireballs: no gravity; acceleration is added, then drag 0.95 applies. */
         FIREBALL(0.0, 0.95, true);
 
-        final double gravity;
-        final double drag;
+        public final double gravity;
+        public final double drag;
         final boolean accelerates;
 
         Kind(double gravity, double drag, boolean accelerates) {

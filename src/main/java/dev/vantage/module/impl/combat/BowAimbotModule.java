@@ -8,6 +8,7 @@ import dev.vantage.module.Category;
 import dev.vantage.module.Module;
 import dev.vantage.setting.BooleanSetting;
 import dev.vantage.setting.NumberSetting;
+import dev.vantage.util.Ballistics;
 import dev.vantage.util.RotationUtil;
 import dev.vantage.util.Simulation;
 import net.minecraft.client.Minecraft;
@@ -91,55 +92,7 @@ public class BowAimbotModule extends Module {
         }
     }
 
-    /**
-     * The flattest pitch whose simulated arrow passes the target's distance at its height.
-     *
-     * @return the pitch, or null if the target is out of range at this draw
-     */
     static Float solvePitch(double horizontal, double height, double velocity) {
-        // Forty-five degrees up is close to the longest shot a bow makes; if even that does not
-        // reach the target's height at its distance, nothing will.
-        float low = -45.0f;
-        float high = 60.0f;
-        Double lobError = heightErrorAt(low, horizontal, height, velocity);
-        if (lobError == null || lobError < 0.0) {
-            return null;
-        }
-        // Raising the pitch lowers the arrow, so the height error falls monotonically toward
-        // the flat solution; bisect for where it crosses zero.
-        for (int i = 0; i < 30; i++) {
-            float middle = (low + high) / 2.0f;
-            Double middleError = heightErrorAt(middle, horizontal, height, velocity);
-            if (middleError != null && middleError >= 0.0) {
-                low = middle;
-            } else {
-                high = middle;
-            }
-        }
-        return (low + high) / 2.0f;
-    }
-
-    private static Double heightErrorAt(float pitch, double horizontal, double height, double velocity) {
-        double radians = Math.toRadians(pitch);
-        double vx = Math.cos(radians) * velocity;
-        double vy = -Math.sin(radians) * velocity;
-        double x = 0.0;
-        double y = 0.0;
-        for (int tick = 0; tick < 200; tick++) {
-            double nx = x + vx;
-            double ny = y + vy;
-            if (nx >= horizontal) {
-                double fraction = vx <= 0.0 ? 0.0 : (horizontal - x) / vx;
-                return (y + vy * fraction) - height;
-            }
-            x = nx;
-            y = ny;
-            vx *= 0.99;
-            vy = vy * 0.99 - 0.05;
-            if (y < height - 200.0) {
-                return null;
-            }
-        }
-        return null;
+        return Ballistics.solvePitch(Simulation.Kind.ARROW, horizontal, height, velocity);
     }
 }

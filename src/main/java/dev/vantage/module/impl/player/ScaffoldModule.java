@@ -10,12 +10,9 @@ import dev.vantage.setting.NumberSetting;
 import dev.vantage.util.BlockUtil;
 import dev.vantage.util.InventoryUtil;
 import dev.vantage.util.MovementUtil;
-import dev.vantage.util.PacketUtil;
 import dev.vantage.util.RotationUtil;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.entity.EntityPlayerSP;
-import net.minecraft.item.ItemStack;
-import net.minecraft.network.play.client.C0APacketAnimation;
 import net.minecraft.util.BlockPos;
 import net.minecraft.util.MathHelper;
 import net.minecraft.util.Vec3;
@@ -93,8 +90,7 @@ public class ScaffoldModule extends Module {
     }
 
     private void onMotion(MotionEvent event) {
-        Minecraft mc = Minecraft.getMinecraft();
-        EntityPlayerSP player = mc.thePlayer;
+        EntityPlayerSP player = Minecraft.getMinecraft().thePlayer;
         if (event.isPre()) {
             pending = null;
             if (cooldown > 0) {
@@ -120,23 +116,12 @@ public class ScaffoldModule extends Module {
         if (pending == null) {
             return;
         }
-        final BlockUtil.Placement placement = pending;
+        BlockUtil.Placement placement = pending;
         pending = null;
-        final int slot = InventoryUtil.blockSlot();
-        if (slot < 0) {
-            return;
+        int slot = InventoryUtil.blockSlot();
+        if (slot >= 0) {
+            BlockUtil.place(placement, slot, swing.value());
         }
-        InventoryUtil.withSlot(slot, () -> {
-            ItemStack stack = player.inventory.getStackInSlot(slot);
-            if (mc.playerController.onPlayerRightClick(player, mc.theWorld, stack,
-                    placement.against, placement.face, placement.hitVec)) {
-                if (swing.value()) {
-                    player.swingItem();
-                } else {
-                    PacketUtil.send(new C0APacketAnimation());
-                }
-            }
-        });
         cooldown = delay.asInt();
     }
 

@@ -17,6 +17,15 @@ import dev.vantage.module.impl.analysis.CheatDetectorModule;
 import dev.vantage.module.impl.client.ClickGuiModule;
 import dev.vantage.module.impl.client.HudEditorModule;
 import dev.vantage.module.impl.client.ModsManagerModule;
+import dev.vantage.module.impl.bedwars.BedEspModule;
+import dev.vantage.module.impl.bedwars.BedGuardModule;
+import dev.vantage.module.impl.bedwars.BedNukerModule;
+import dev.vantage.module.impl.bedwars.BreachPlannerModule;
+import dev.vantage.module.impl.bedwars.EconomyTrackerModule;
+import dev.vantage.module.impl.bedwars.ItemEspModule;
+import dev.vantage.module.impl.bedwars.ProjectileForecastModule;
+import dev.vantage.module.impl.bedwars.RushRadarModule;
+import dev.vantage.module.impl.bedwars.VoidClutchModule;
 import dev.vantage.module.impl.combat.AimAssistModule;
 import dev.vantage.module.impl.combat.AntiBotModule;
 import dev.vantage.module.impl.combat.AutoClickerModule;
@@ -215,6 +224,16 @@ public class Vantage {
                 new NoHurtCamModule(),
                 new TimeChangerModule(),
                 new FullbrightModule(),
+                // Bedwars
+                new BreachPlannerModule(),
+                new RushRadarModule(),
+                new EconomyTrackerModule(),
+                new BedGuardModule(),
+                new ProjectileForecastModule(),
+                new VoidClutchModule(),
+                new BedNukerModule(),
+                new BedEspModule(),
+                new ItemEspModule(),
                 // Analysis
                 new ThreatListHud(),
                 new CheatDetectorModule(),

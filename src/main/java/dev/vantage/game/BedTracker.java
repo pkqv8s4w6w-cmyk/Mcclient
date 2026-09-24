@@ -26,10 +26,11 @@ import java.util.Map;
  * the raw storage arrays a few chunks per tick, which finds a bed across a whole map in a couple of
  * seconds for a negligible cost per frame.
  *
- * <p>Ownership comes from who is seen around a bed. At the start of a game everyone spawns on their
- * own island, and they respawn there afterwards, so the team whose players keep turning up beside a
- * bed is the team it belongs to. Your own bed is additionally the one nearest you when beds first
- * appear, since that is where the game puts you.
+ * <p>Ownership comes mostly from colour. Players defend their bed with their own team's wool, and
+ * most maps build each island in its team's colours, so the dyed wool, clay and glass around a bed
+ * say whose it is. Who stands next to a bed only counts in the first seconds after the beds appear,
+ * while everyone is still on their spawn island; after that a player beside a bed is as likely to
+ * be breaking it as defending it. Your own bed is the one nearest you at that moment.
  */
 public final class BedTracker {
 
@@ -38,6 +39,7 @@ public final class BedTracker {
         private final BlockPos head;
         private final BlockPos foot;
         private final Map<TeamColour, Double> votes = new EnumMap<TeamColour, Double>(TeamColour.class);
+        private final Map<TeamColour, Double> colours = new EnumMap<TeamColour, Double>(TeamColour.class);
         private boolean own;
 
         Bed(BlockPos head, BlockPos foot) {
@@ -79,14 +81,22 @@ public final class BedTracker {
             return own;
         }
 
-        /** The team most often seen at this bed, or unknown if nobody has been yet. */
+        /**
+         * The team this bed belongs to: the dominant colour around it, or failing that whoever was
+         * standing by it when the game began. Unknown if neither says.
+         */
         public TeamColour getOwner() {
+            TeamColour byColour = strongest(colours, 3.0);
+            return byColour != TeamColour.UNKNOWN ? byColour : strongest(votes, 1.0);
+        }
+
+        private static TeamColour strongest(Map<TeamColour, Double> tally, double minimum) {
             TeamColour best = TeamColour.UNKNOWN;
-            double bestVotes = 0.0;
-            for (Map.Entry<TeamColour, Double> entry : votes.entrySet()) {
-                if (entry.getValue() > bestVotes) {
+            double bestCount = minimum - 1.0e-9;
+            for (Map.Entry<TeamColour, Double> entry : tally.entrySet()) {
+                if (entry.getValue() > bestCount) {
                     best = entry.getKey();
-                    bestVotes = entry.getValue();
+                    bestCount = entry.getValue();
                 }
             }
             return best;
@@ -104,6 +114,9 @@ public final class BedTracker {
     /** How far from a bed a player counts as being on its island. */
     private static final double ISLAND_RADIUS = 18.0;
     private static final int CHUNKS_PER_TICK = 24;
+    /** How long after beds appear that standing beside one says it is yours. */
+    private static final int SPAWN_WINDOW_TICKS = 400;
+    private static final int COLOUR_RADIUS = 4;
 
     public static BedTracker get() {
         return INSTANCE;
@@ -116,6 +129,7 @@ public final class BedTracker {
     private WorldClient world;
     private boolean ownAssigned;
     private int ticks;
+    private int bedsFoundAt = -1;
 
     private BedTracker() {
     }
@@ -191,6 +205,7 @@ public final class BedTracker {
         world = newWorld;
         ownAssigned = false;
         ticks = 0;
+        bedsFoundAt = -1;
     }
 
     private void scanSlice(Minecraft mc) {
@@ -280,6 +295,15 @@ public final class BedTracker {
         if (beds.isEmpty()) {
             return;
         }
+        if (bedsFoundAt < 0) {
+            bedsFoundAt = ticks;
+        }
+        for (Bed bed : beds) {
+            countColours(mc, bed);
+        }
+        if (ticks - bedsFoundAt > SPAWN_WINDOW_TICKS) {
+            return;
+        }
         if (!ownAssigned && mc.thePlayer.onGround) {
             Bed nearest = bedNear(mc.thePlayer.posX, mc.thePlayer.posZ, ISLAND_RADIUS);
             if (nearest != null) {
@@ -296,10 +320,66 @@ public final class BedTracker {
             if (bed == null) {
                 continue;
             }
-            // Your own island is settled by where you spawned; your team counts double there.
             double weight = player == mc.thePlayer ? 2.0 : 1.0;
             Double current = bed.votes.get(team);
             bed.votes.put(team, (current == null ? 0.0 : current) + weight);
+        }
+    }
+
+    /** Tallies dyed blocks around a bed by the team colour they match. */
+    private static void countColours(Minecraft mc, Bed bed) {
+        bed.colours.clear();
+        BlockPos head = bed.head;
+        for (int x = -COLOUR_RADIUS; x <= COLOUR_RADIUS; x++) {
+            for (int y = -1; y <= COLOUR_RADIUS; y++) {
+                for (int z = -COLOUR_RADIUS; z <= COLOUR_RADIUS; z++) {
+                    IBlockState state = mc.theWorld.getBlockState(head.add(x, y, z));
+                    TeamColour colour = dyedTeam(state);
+                    if (colour != TeamColour.UNKNOWN) {
+                        Double count = bed.colours.get(colour);
+                        bed.colours.put(colour, (count == null ? 0.0 : count) + 1.0);
+                    }
+                }
+            }
+        }
+    }
+
+    /** The team a dyed block's colour belongs to, or unknown for anything undyed. */
+    static TeamColour dyedTeam(IBlockState state) {
+        Block block = state.getBlock();
+        if (block != Blocks.wool && block != Blocks.stained_hardened_clay && block != Blocks.stained_glass
+                && block != Blocks.stained_glass_pane && block != Blocks.carpet) {
+            return TeamColour.UNKNOWN;
+        }
+        net.minecraft.item.EnumDyeColor dye = (net.minecraft.item.EnumDyeColor) state.getValue(
+                block == Blocks.wool ? net.minecraft.block.BlockColored.COLOR
+                        : block == Blocks.stained_hardened_clay ? net.minecraft.block.BlockColored.COLOR
+                        : block == Blocks.carpet ? net.minecraft.block.BlockCarpet.COLOR
+                        : block == Blocks.stained_glass ? net.minecraft.block.BlockStainedGlass.COLOR
+                        : net.minecraft.block.BlockStainedGlassPane.COLOR);
+        switch (dye) {
+            case RED:
+                return TeamColour.RED;
+            case BLUE:
+                return TeamColour.BLUE;
+            case LIME:
+            case GREEN:
+                return TeamColour.GREEN;
+            case YELLOW:
+                return TeamColour.YELLOW;
+            case LIGHT_BLUE:
+            case CYAN:
+                return TeamColour.AQUA;
+            case WHITE:
+                return TeamColour.WHITE;
+            case PINK:
+            case MAGENTA:
+                return TeamColour.PINK;
+            case GRAY:
+            case SILVER:
+                return TeamColour.GREY;
+            default:
+                return TeamColour.UNKNOWN;
         }
     }
 }
