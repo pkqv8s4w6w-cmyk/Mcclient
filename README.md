@@ -1,11 +1,6 @@
 # Vantage
 
-A Minecraft 1.8.9 Forge client built around information rather than mechanical advantage: a threat
-ranking overlay driven by the Hypixel API, a client-side cheat detector, a clean ClickGUI, and a set
-of quality-of-life modules.
-
-Everything here is the kind of thing Hypixel permits outright, so it is not limited to private
-servers.
+A Minecraft 1.8.9 Forge client to give users an advantage.
 
 ## What is in it
 
@@ -22,12 +17,6 @@ All draggable, with alignment snapping and scroll-to-resize.
 **Utility and visual** — Zoom, Toggle Sprint, Fullbright, Nick Hider.
 
 **Client** — ClickGUI, HUD Editor, Mods Manager.
-
-## What is deliberately not in it
-
-No killaura, reach, backtrack, aim assist, autoclicker, fast place, or ESP. Those exist to beat
-other players by mechanical advantage and are out of scope for this project. The module system is a
-plain abstract class, so the codebase does not stop anyone adding their own.
 
 ## Building
 
