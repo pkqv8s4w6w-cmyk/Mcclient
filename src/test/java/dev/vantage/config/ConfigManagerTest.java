@@ -229,4 +229,46 @@ class ConfigManagerTest {
         assertEquals(5.0, module.amount.asDouble(), 1e-9);
         assertEquals("hello", module.label.get());
     }
+
+    @Test
+    void anExportedProfileImportsUnderAFreshName(@TempDir Path dir) throws IOException {
+        ConfigManager config = new ConfigManager(dir);
+        SampleModule saved = new SampleModule();
+        saved.setEnabled(true);
+        saved.amount.set(9.0);
+        config.save("shared", Collections.singletonList(saved));
+
+        String text = config.exportProfile("shared");
+        String first = config.importProfile("shared", text);
+        String second = config.importProfile("shared", text);
+        assertEquals("shared-2", first);
+        assertEquals("shared-3", second);
+
+        SampleModule loaded = new SampleModule();
+        assertTrue(config.load(first, Collections.singletonList(loaded)));
+        assertTrue(loaded.isEnabled());
+        assertEquals(9.0, loaded.amount.asDouble(), 1.0e-9);
+    }
+
+    @Test
+    void importingSomethingThatIsNotAProfileIsRefused(@TempDir Path dir) {
+        ConfigManager config = new ConfigManager(dir);
+        assertThrows(IOException.class, () -> config.importProfile("x", "not json at all {"));
+        assertThrows(IOException.class, () -> config.importProfile("x", "{\"version\": 1}"));
+        assertThrows(IOException.class, () -> config.importProfile("x", ""));
+    }
+
+    @Test
+    void aSummaryCountsEnabledModules(@TempDir Path dir) throws IOException {
+        ConfigManager config = new ConfigManager(dir);
+        SampleModule on = new SampleModule();
+        on.setEnabled(true);
+        OtherModule off = new OtherModule();
+        config.save("mixed", java.util.Arrays.<Module>asList(on, off));
+
+        ConfigManager.ProfileSummary summary = config.summarise("mixed");
+        assertEquals(1, summary.enabledModules);
+        assertTrue(summary.lastModified > 0L);
+        assertEquals(0, config.summarise("missing").enabledModules);
+    }
 }

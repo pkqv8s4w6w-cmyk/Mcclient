@@ -64,6 +64,7 @@ import dev.vantage.module.impl.player.FastPlaceModule;
 import dev.vantage.module.impl.player.InvManagerModule;
 import dev.vantage.module.impl.player.NoRotateModule;
 import dev.vantage.module.impl.player.ScaffoldModule;
+import dev.vantage.module.impl.utility.MiddleClickFriendModule;
 import dev.vantage.module.impl.utility.NickHiderModule;
 import dev.vantage.module.impl.utility.ZoomModule;
 import dev.vantage.module.impl.visual.ChamsModule;
@@ -252,6 +253,7 @@ public class Vantage {
                 new NickHiderModule(),
                 new ModsManagerModule(),
                 // Client
+                new MiddleClickFriendModule(),
                 new ClickGuiModule(),
                 new HudEditorModule());
     }
@@ -260,6 +262,10 @@ public class Vantage {
         try {
             activeProfile = configManager.getActiveProfile();
             boolean existed = configManager.load(activeProfile, moduleManager.getModules());
+            ClickGuiModule menu = moduleManager.get(ClickGuiModule.class);
+            if (menu != null) {
+                menu.migrateOldDefaults();
+            }
             LOGGER.info("[{}] {} profile '{}'", MOD_NAME, existed ? "loaded" : "no saved", activeProfile);
         } catch (IOException failure) {
             // Keep the compiled-in defaults rather than refusing to start.
