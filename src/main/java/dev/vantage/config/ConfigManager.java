@@ -102,7 +102,7 @@ public final class ConfigManager {
         JsonObject moduleTree = new JsonObject();
         for (Module module : modules) {
             JsonObject entry = new JsonObject();
-            entry.addProperty("enabled", module.isEnabled());
+            entry.addProperty("enabled", module.isEnabledForSave());
             entry.addProperty("keybind", module.getKeybind().get());
 
             JsonObject settingTree = new JsonObject();
@@ -238,6 +238,76 @@ public final class ConfigManager {
             throw new IOException("the default profile cannot be deleted");
         }
         Files.deleteIfExists(profileFile(name));
+    }
+
+    // -- sharing ----------------------------------------------------------------------------
+
+    /** A profile's contents as text, for copying to a friend. */
+    public String exportProfile(String profile) throws IOException {
+        Path file = profileFile(profile);
+        if (!Files.isRegularFile(file)) {
+            throw new IOException("no profile called '" + sanitiseProfileName(profile) + "'");
+        }
+        return new String(Files.readAllBytes(file), StandardCharsets.UTF_8);
+    }
+
+    /**
+     * Saves shared profile text under a new name, never over an existing profile.
+     *
+     * @return the name it was saved as
+     * @throws IOException if the text is not a profile at all
+     */
+    public String importProfile(String suggestedName, String text) throws IOException {
+        JsonElement parsed;
+        try {
+            parsed = new JsonParser().parse(text == null ? "" : text.trim());
+        } catch (RuntimeException malformed) {
+            throw new IOException("that is not a profile");
+        }
+        if (parsed == null || !parsed.isJsonObject() || !parsed.getAsJsonObject().has("modules")
+                || !parsed.getAsJsonObject().get("modules").isJsonObject()) {
+            throw new IOException("that is not a profile");
+        }
+        String base = sanitiseProfileName(suggestedName);
+        String name = base;
+        for (int suffix = 2; Files.exists(profileFile(name)); suffix++) {
+            name = base + "-" + suffix;
+        }
+        writeAtomically(profileFile(name), GSON.toJson(parsed));
+        return name;
+    }
+
+    /** What the profile list shows about a profile without loading it. */
+    public static final class ProfileSummary {
+        public final String name;
+        public final int enabledModules;
+        public final long lastModified;
+
+        ProfileSummary(String name, int enabledModules, long lastModified) {
+            this.name = name;
+            this.enabledModules = enabledModules;
+            this.lastModified = lastModified;
+        }
+    }
+
+    public ProfileSummary summarise(String profile) {
+        Path file = profileFile(profile);
+        int enabled = 0;
+        long modified = 0L;
+        try {
+            modified = Files.getLastModifiedTime(file).toMillis();
+            JsonElement parsed = new JsonParser().parse(new String(Files.readAllBytes(file), StandardCharsets.UTF_8));
+            JsonObject modules = parsed.getAsJsonObject().getAsJsonObject("modules");
+            for (Map.Entry<String, JsonElement> entry : modules.entrySet()) {
+                JsonElement flag = entry.getValue().getAsJsonObject().get("enabled");
+                if (flag != null && flag.isJsonPrimitive() && flag.getAsBoolean()) {
+                    enabled++;
+                }
+            }
+        } catch (IOException | RuntimeException ignored) {
+            // A missing or unreadable profile summarises as empty.
+        }
+        return new ProfileSummary(sanitiseProfileName(profile), enabled, modified);
     }
 
     /** Restores every setting on every module to its compiled-in default. */

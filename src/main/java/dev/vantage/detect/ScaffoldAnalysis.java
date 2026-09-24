@@ -44,11 +44,22 @@ public final class ScaffoldAnalysis {
 
     public static final Result NOTHING = new Result(0, 0.0, 0.0);
 
-    /** Fewer placements than this and a run of luck looks like a pattern. */
-    private static final int MIN_PLACEMENTS = 8;
+    /**
+     * Fewer placements than this and a run of luck looks like a pattern.
+     *
+     * <p>Was eight. Eight blocks is one short bridge across a gap, and a player who happens to be
+     * looking ahead for the last few of them — checking where they are going, which is the normal
+     * thing to do — produced a clean sweep. Twelve is a sustained run.
+     */
+    private static final int MIN_PLACEMENTS = 12;
 
-    /** Above this share of placements looking automated, it is worth saying something. */
-    private static final double SUSPICIOUS_FRACTION = 0.75;
+    /**
+     * Above this share of placements looking automated, it is worth saying something.
+     *
+     * <p>Raised from three quarters. The remaining quarter was doing a lot of work: it let a
+     * player who glanced down every fourth block still read as fully automated.
+     */
+    private static final double SUSPICIOUS_FRACTION = 0.85;
 
     private ScaffoldAnalysis() {
     }

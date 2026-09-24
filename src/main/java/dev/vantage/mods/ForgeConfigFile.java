@@ -134,11 +134,20 @@ public final class ForgeConfigFile {
         return file.getName();
     }
 
-    /** Writes the edited values back. Most mods read their config once, so a restart is needed. */
+    /**
+     * Writes the edited values back. Most mods read their config once, so a restart is needed.
+     *
+     * <p>Only values that were actually changed are written. Numbers are clamped into a range a
+     * slider can use when they are read, so writing an untouched one back would quietly replace a
+     * large value in someone else's config with the clamp.
+     */
     public void save() {
         for (Map.Entry<Setting<?>, Property> entry : backing.entrySet()) {
             Setting<?> setting = entry.getKey();
             Property property = entry.getValue();
+            if (setting.isDefault()) {
+                continue;
+            }
             if (setting instanceof BooleanSetting) {
                 property.set(((BooleanSetting) setting).value());
             } else if (setting instanceof NumberSetting) {

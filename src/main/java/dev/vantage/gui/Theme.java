@@ -21,11 +21,11 @@ public final class Theme {
 
     // -- defaults ---------------------------------------------------------------------------
 
-    private static final int DEFAULT_ACCENT = 0xFF4C8DFF;
-    private static final int DEFAULT_PANEL = 0xFF0E0F12;
-    private static final int DEFAULT_RAIL = 0xFF0A0B0D;
-    private static final int DEFAULT_ROW = 0xFF16181D;
-    private static final int DEFAULT_TEXT = 0xFFE8EAED;
+    private static final int DEFAULT_ACCENT = 0xFF8B7CF6;
+    private static final int DEFAULT_PANEL = 0xFF0D0D12;
+    private static final int DEFAULT_RAIL = 0xFF09090D;
+    private static final int DEFAULT_ROW = 0xFF16161E;
+    private static final int DEFAULT_TEXT = 0xFFE9E9F0;
     private static final int DEFAULT_SAFE = 0xFF4ADE80;
     private static final int DEFAULT_DANGER = 0xFFFF5A5A;
 

@@ -10,85 +10,142 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ClickAnalysisTest {
 
-    /** Human clicking rarely drops below this spread, even at high rates. */
-    private static final double NORMAL_SPREAD_LIMIT = 5.0;
+    private static final double SPREAD = ClickAnalysis.DEFAULT_MAX_SPREAD_MILLIS;
 
-    /** Even intervals, as a timer produces. */
-    private static long[] machine(int count, long intervalMillis) {
-        long[] times = new long[count];
-        for (int i = 0; i < count; i++) {
-            times[i] = 1_000_000L + i * intervalMillis;
-        }
-        return times;
-    }
-
-    /** Intervals scattered around a mean, as a hand produces. */
-    private static long[] human(int count, long meanMillis, long jitterMillis, long seed) {
+    /** A hand: the interval wanders, and every so often the rhythm breaks entirely. */
+    private static long[] byHand(int clicks, double meanMillis, double jitterMillis, long seed) {
         Random random = new Random(seed);
-        long[] times = new long[count];
+        long[] times = new long[clicks];
         long now = 1_000_000L;
-        for (int i = 0; i < count; i++) {
+        for (int i = 0; i < clicks; i++) {
             times[i] = now;
-            now += Math.max(1L, meanMillis + (long) ((random.nextDouble() * 2 - 1) * jitterMillis));
+            double gap = meanMillis + random.nextGaussian() * jitterMillis;
+            // Roughly one click in fifteen, a person hesitates, adjusts their grip, or looks away.
+            if (random.nextInt(15) == 0) {
+                gap += 60.0 + random.nextDouble() * 120.0;
+            }
+            now += Math.max(1L, Math.round(gap));
         }
         return times;
     }
 
+    /** A timer, optionally with the jitter clickers add to look human. */
+    private static long[] byTimer(int clicks, double meanMillis, double jitterShare, long seed) {
+        Random random = new Random(seed);
+        long[] times = new long[clicks];
+        long now = 1_000_000L;
+        for (int i = 0; i < clicks; i++) {
+            times[i] = now;
+            double gap = meanMillis * (1.0 + (random.nextDouble() * 2.0 - 1.0) * jitterShare);
+            now += Math.max(1L, Math.round(gap));
+        }
+        return times;
+    }
+
+    // -- the failure that matters -------------------------------------------------------------
+
     @Test
-    void aPerfectlyEvenSequenceIsFlagged() {
-        ClickAnalysis.Result result = ClickAnalysis.analyse(machine(40, 80), NORMAL_SPREAD_LIMIT);
+    void fastHumanClickingIsNotFlagged() {
+        // Butterfly and drag clicking reach 12 to 16 a second legitimately. The rate is not the
+        // tell and never was.
+        for (long seed = 1; seed <= 6; seed++) {
+            ClickAnalysis.Result result = ClickAnalysis.analyse(byHand(60, 70.0, 15.0, seed), SPREAD);
+            assertFalse(result.isSuspicious(), "seed " + seed + ": " + result.getClicksPerSecond()
+                    + " cps at " + result.getStandardDeviationMillis() + "ms spread");
+        }
+    }
+
+    @Test
+    void averageHumanClickingIsNotFlagged() {
+        for (long seed = 1; seed <= 6; seed++) {
+            assertFalse(ClickAnalysis.analyse(byHand(60, 110.0, 22.0, seed), SPREAD).isSuspicious());
+        }
+    }
+
+    @Test
+    void aSteadyHandWithOccasionalPausesIsNotFlagged() {
+        // The rhythm is tight, but a person still stops now and then. A timer never does, and that
+        // is what the outlier count is for.
+        long[] times = byTimer(60, 90.0, 0.03, 4);
+        // Insert three real pauses, the kind a hand makes.
+        for (int i = 15; i < times.length; i++) {
+            times[i] += 250L;
+        }
+        for (int i = 30; i < times.length; i++) {
+            times[i] += 300L;
+        }
+        for (int i = 45; i < times.length; i++) {
+            times[i] += 200L;
+        }
+        assertFalse(ClickAnalysis.analyse(times, SPREAD).isSuspicious());
+    }
+
+    // -- what it should catch -----------------------------------------------------------------
+
+    @Test
+    void aPerfectlyEvenTimerIsFlagged() {
+        ClickAnalysis.Result result = ClickAnalysis.analyse(byTimer(60, 90.0, 0.0, 1), SPREAD);
         assertTrue(result.isSuspicious());
-        assertTrue(result.getConfidence() > 0.9, "confidence was " + result.getConfidence());
-        assertEquals(12.5, result.getClicksPerSecond(), 0.1);
+        assertEquals(1.0, result.getConfidence(), 0.05, "no variation at all is as sure as it gets");
     }
 
     @Test
-    void ordinaryHumanClickingIsNotFlagged() {
-        ClickAnalysis.Result result = ClickAnalysis.analyse(human(40, 90, 25, 1), NORMAL_SPREAD_LIMIT);
-        assertFalse(result.isSuspicious(),
-                "spread was " + result.getStandardDeviationMillis() + "ms");
+    void aTimerWithHumanisingJitterIsStillFlagged() {
+        // Clickers advertise about ten percent randomisation as enough to pass for a person. At a
+        // dozen clicks a second that is only a few milliseconds of spread.
+        for (long seed = 1; seed <= 5; seed++) {
+            ClickAnalysis.Result result = ClickAnalysis.analyse(byTimer(60, 85.0, 0.10, seed), SPREAD);
+            assertTrue(result.isSuspicious(),
+                    "seed " + seed + " spread " + result.getStandardDeviationMillis());
+        }
+    }
+
+    // -- robustness ---------------------------------------------------------------------------
+
+    @Test
+    void oneDroppedPacketDoesNotHideAClicker() {
+        // A stretched interval used to dominate the standard deviation, so any connection that
+        // hiccupped blinded the check on exactly the players it should have caught.
+        long[] times = byTimer(60, 90.0, 0.02, 2);
+        for (int i = 25; i < times.length; i++) {
+            times[i] += 400L;
+        }
+        assertTrue(ClickAnalysis.analyse(times, SPREAD).isSuspicious());
     }
 
     @Test
-    void fastButterflyClickingIsNotFlaggedJustForBeingFast() {
-        // Around 16 clicks a second by hand is normal and legitimate. Judging on rate alone would
-        // catch this, which is exactly the mistake worth avoiding.
-        ClickAnalysis.Result result = ClickAnalysis.analyse(human(60, 62, 16, 7), NORMAL_SPREAD_LIMIT);
-        assertTrue(result.getClicksPerSecond() > 14.0, "rate was " + result.getClicksPerSecond());
-        assertFalse(result.isSuspicious(), "fast but scattered clicking must pass");
+    void oneDuplicateTimestampDoesNotBlankTheWholeWindow() {
+        // Two swings in the same millisecond is a packet artefact. The old version threw away the
+        // entire sample over it, which lost seconds of evidence at a time.
+        long[] times = byTimer(60, 90.0, 0.02, 3);
+        times[20] = times[19];
+        ClickAnalysis.Result result = ClickAnalysis.analyse(times, SPREAD);
+        assertTrue(result.isSuspicious());
+        assertTrue(result.getSamples() >= 55, "only the one bad interval should be dropped");
+    }
+
+    // -- edges --------------------------------------------------------------------------------
+
+    @Test
+    void slowDeliberateClickingSaysNothing() {
+        // Below a handful a second the gaps are pauses, not a rhythm, and their evenness is
+        // meaningless either way.
+        assertFalse(ClickAnalysis.analyse(byTimer(60, 400.0, 0.0, 1), SPREAD).isSuspicious());
     }
 
     @Test
-    void anAutoclickerWithSlightRandomisationIsStillFlagged() {
-        ClickAnalysis.Result result = ClickAnalysis.analyse(human(50, 85, 3, 3), NORMAL_SPREAD_LIMIT);
-        assertTrue(result.isSuspicious(), "spread was " + result.getStandardDeviationMillis() + "ms");
+    void aShortBurstSaysNothing() {
+        assertFalse(ClickAnalysis.analyse(byTimer(15, 90.0, 0.0, 1), SPREAD).isSuspicious(),
+                "under a couple of seconds of clicking is not a pattern");
     }
 
     @Test
-    void aShortBurstIsNotEnoughToJudge() {
-        assertFalse(ClickAnalysis.analyse(machine(6, 80), NORMAL_SPREAD_LIMIT).isSuspicious());
-        assertEquals(0.0, ClickAnalysis.analyse(null, NORMAL_SPREAD_LIMIT).getConfidence());
-    }
-
-    @Test
-    void slowDeliberateClickingIsIgnored() {
-        // Gaps this long are dominated by pauses, not by clicking technique.
-        assertFalse(ClickAnalysis.analyse(machine(40, 400), NORMAL_SPREAD_LIMIT).isSuspicious());
-    }
-
-    @Test
-    void theThresholdTradesSensitivityAgainstFalsePositives() {
-        long[] borderline = human(40, 90, 10, 11);
-        assertTrue(ClickAnalysis.analyse(borderline, 14.0).isSuspicious(),
-                "a loose threshold catches more, including borderline humans");
-        assertFalse(ClickAnalysis.analyse(borderline, 4.0).isSuspicious(),
-                "a tight threshold only catches near-perfect timing");
-    }
-
-    @Test
-    void nonIncreasingTimestampsAreRejectedRatherThanScored() {
-        long[] broken = machine(40, 80);
-        broken[20] = broken[19];
-        assertFalse(ClickAnalysis.analyse(broken, NORMAL_SPREAD_LIMIT).isSuspicious());
+    void malformedInputIsSafe() {
+        assertFalse(ClickAnalysis.analyse(null, SPREAD).isSuspicious());
+        assertFalse(ClickAnalysis.analyse(new long[0], SPREAD).isSuspicious());
+        long[] identical = new long[60];
+        java.util.Arrays.fill(identical, 5L);
+        assertFalse(ClickAnalysis.analyse(identical, SPREAD).isSuspicious(),
+                "no usable gaps at all means no verdict, not a certain one");
     }
 }

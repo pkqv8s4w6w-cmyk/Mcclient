@@ -1,5 +1,6 @@
 package dev.vantage.module;
 
+import dev.vantage.event.EventBus;
 import dev.vantage.setting.KeybindSetting;
 import dev.vantage.setting.Setting;
 
@@ -7,6 +8,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
+import java.util.function.Consumer;
 
 /**
  * A single toggleable feature.
@@ -23,8 +25,18 @@ public abstract class Module {
 
     private final List<Setting<?>> settings = new ArrayList<>();
     private final KeybindSetting keybind = new KeybindSetting("Keybind", "Key that toggles this module", KeybindSetting.UNBOUND);
+    private final List<EventBus.Listener<?>> listeners = new ArrayList<>();
 
     private boolean enabled;
+    private boolean blatant;
+    private boolean rememberEnabled = true;
+
+    /** Told about every toggle made through {@link #setEnabled}, for toggle notifications. */
+    private static volatile Consumer<Module> toggleListener;
+
+    public static void setToggleListener(Consumer<Module> listener) {
+        toggleListener = listener;
+    }
 
     protected Module(String name, Category category, String description) {
         this.name = name;
@@ -51,6 +63,69 @@ public abstract class Module {
 
     public KeybindSetting getKeybind() {
         return keybind;
+    }
+
+    /**
+     * Marks this module as an obvious advantage rather than a quality-of-life tweak. Shown as a tag
+     * in the menu so a config can be checked at a glance.
+     */
+    protected final void markBlatant() {
+        blatant = true;
+    }
+
+    public boolean isBlatant() {
+        return blatant;
+    }
+
+    /**
+     * Saves this module as off whatever its state. For modules whose enable hook does setup that a
+     * profile load cannot - Freecam leaving a body behind, Blink marking where it started - so they
+     * never come back on half-initialised.
+     */
+    protected final void forgetEnabledOnSave() {
+        rememberEnabled = false;
+    }
+
+    /** The enabled state to write to a profile. */
+    public boolean isEnabledForSave() {
+        return enabled && rememberEnabled;
+    }
+
+    /**
+     * A short label shown after the name in the module list, such as the current mode.
+     *
+     * @return the label, or null for none
+     */
+    public String getSuffix() {
+        return null;
+    }
+
+    // -- events -----------------------------------------------------------------------------
+
+    /**
+     * Declares a handler for an event on the client's {@link EventBus}. Call from the constructor.
+     * The handler is live exactly while the module is enabled.
+     */
+    protected final <E> void on(Class<E> type, Consumer<E> handler) {
+        on(type, EventBus.NORMAL, handler);
+    }
+
+    protected final <E> void on(Class<E> type, int priority, Consumer<E> handler) {
+        EventBus.Listener<E> listener = new EventBus.Listener<E>(type, priority, handler, this);
+        listeners.add(listener);
+        if (enabled) {
+            EventBus.global().register(listener);
+        }
+    }
+
+    private void syncListeners() {
+        for (EventBus.Listener<?> listener : listeners) {
+            if (enabled) {
+                EventBus.global().register(listener);
+            } else {
+                EventBus.global().unregister(listener);
+            }
+        }
     }
 
     // -- settings ---------------------------------------------------------------------------
@@ -107,10 +182,15 @@ public abstract class Module {
             return;
         }
         enabled = value;
+        syncListeners();
         if (value) {
             onEnable();
         } else {
             onDisable();
+        }
+        Consumer<Module> listener = toggleListener;
+        if (listener != null) {
+            listener.accept(this);
         }
     }
 
@@ -124,6 +204,34 @@ public abstract class Module {
      */
     public final void setEnabledSilently(boolean value) {
         this.enabled = value;
+        // Handlers follow the flag even here. A module loaded as enabled from a profile has to
+        // actually run; only the one-off enable and disable hooks are skipped.
+        syncListeners();
+    }
+
+    /**
+     * Switches off after a failure without running the disable hook. Handlers stop at once.
+     *
+     * @return whether the module was on, and so whether {@link #runDisableHook} is owed
+     */
+    final boolean stopAfterFailure() {
+        boolean wasEnabled = enabled;
+        enabled = false;
+        syncListeners();
+        return wasEnabled;
+    }
+
+    /**
+     * Runs the disable hook for a module stopped by {@link #stopAfterFailure}, so one that changed
+     * game state - the timer, flight, the FOV - still puts it back. A failure here is swallowed; the
+     * original one has already been reported.
+     */
+    final void runDisableHook() {
+        try {
+            onDisable();
+        } catch (Throwable ignored) {
+            // Nothing more can be done for it.
+        }
     }
 
     protected void onEnable() {

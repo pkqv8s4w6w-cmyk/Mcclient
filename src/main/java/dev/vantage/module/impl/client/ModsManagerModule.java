@@ -9,7 +9,7 @@ import net.minecraft.client.Minecraft;
 public class ModsManagerModule extends Module {
 
     public ModsManagerModule() {
-        super("Mods Manager", Category.MODS, "List installed mods and edit their settings");
+        super("Mods Manager", Category.UTILITY, "List installed mods and edit their settings");
     }
 
     @Override

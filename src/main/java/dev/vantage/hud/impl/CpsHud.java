@@ -1,11 +1,11 @@
 package dev.vantage.hud.impl;
 
+import dev.vantage.event.ClickEvent;
 import dev.vantage.gui.Theme;
 import dev.vantage.gui.font.Fonts;
 import dev.vantage.hud.HudModule;
 import dev.vantage.setting.BooleanSetting;
 import dev.vantage.util.CpsMeter;
-import net.minecraft.client.Minecraft;
 
 /** Your own clicks per second. Purely a readout; the detector is a separate thing entirely. */
 public class CpsHud extends HudModule {
@@ -16,30 +16,11 @@ public class CpsHud extends HudModule {
     private final CpsMeter left = new CpsMeter();
     private final CpsMeter right = new CpsMeter();
 
-    private boolean leftWasDown;
-    private boolean rightWasDown;
-
     public CpsHud() {
         super("CPS", "Shows your clicks per second");
-    }
-
-    @Override
-    public void onTick() {
-        Minecraft mc = Minecraft.getMinecraft();
-        long now = System.currentTimeMillis();
-
-        // Count the transition, not the held state, or holding the button would read as clicking.
-        boolean leftDown = mc.gameSettings.keyBindAttack.isKeyDown();
-        if (leftDown && !leftWasDown) {
-            left.click(now);
-        }
-        leftWasDown = leftDown;
-
-        boolean rightDown = mc.gameSettings.keyBindUseItem.isKeyDown();
-        if (rightDown && !rightWasDown) {
-            right.click(now);
-        }
-        rightWasDown = rightDown;
+        // Counted from the clicks the game handles. Sampling the button once a tick, as this used
+        // to, missed any click shorter than a tick and could never read above ten.
+        on(ClickEvent.class, event -> (event.isLeft() ? left : right).click(System.currentTimeMillis()));
     }
 
     private String text() {

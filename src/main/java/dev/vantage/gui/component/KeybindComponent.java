@@ -12,6 +12,14 @@ public class KeybindComponent extends SettingComponent {
     private final KeybindSetting typed;
     private boolean listening;
 
+    /** Shown instead of the setting's name, for rows that need to say whose key it is. */
+    private String label;
+
+    public KeybindComponent(KeybindSetting setting, String label) {
+        this(setting);
+        this.label = label;
+    }
+
     public KeybindComponent(KeybindSetting setting) {
         super(setting);
         this.typed = setting;
@@ -33,7 +41,8 @@ public class KeybindComponent extends SettingComponent {
         if (hovered || listening) {
             RenderUtil.roundedRect(x, y, width, ROW_HEIGHT, 3.0, listening ? Theme.accentDim() : 0x0AFFFFFF);
         }
-        Fonts.SMALL.drawString(typed.getName(), x + LABEL_INSET, y + 2.0f, Theme.textMuted());
+        Fonts.SMALL.drawString(this.label != null ? this.label : typed.getName(), x + LABEL_INSET, y + 2.0f,
+                Theme.textMuted());
 
         String label = listening ? "press a key" : describe(typed.get());
         Fonts.SMALL.drawRightAligned(label, x + width - LABEL_INSET, y + 2.0f,
