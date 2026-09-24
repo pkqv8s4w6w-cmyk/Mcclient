@@ -1,9 +1,7 @@
 package dev.vantage.combat;
 
 import dev.vantage.event.EventBus;
-import dev.vantage.event.JumpEvent;
 import dev.vantage.event.MotionEvent;
-import dev.vantage.event.StrafeEvent;
 import dev.vantage.util.RotationUtil;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.entity.EntityPlayerSP;
@@ -16,8 +14,8 @@ import net.minecraft.client.entity.EntityPlayerSP;
  * snapping, so letting go of a target does not produce a turn no hand could make.
  *
  * <p>The camera never moves. What the server is told and what the player sees are kept apart,
- * which is what "silent" means. With movement correction on, input is re-expressed relative to the
- * server yaw so the player keeps moving the way the camera faces.
+ * which is what "silent" means. Movement needs no correction for it: the server rotation is only
+ * swapped in while the movement packet is being written, so walking always follows the camera.
  */
 public final class RotationManager {
 
@@ -34,30 +32,25 @@ public final class RotationManager {
     private float targetPitch;
     private float speed;
     private int requestPriority = Integer.MIN_VALUE;
-    private boolean requestMoveFix;
     private boolean requested;
 
     private float serverYaw;
     private float serverPitch;
     private boolean active;
-    private boolean moveFix;
 
     private RotationManager() {
     }
 
     public void install() {
         EventBus.global().subscribe(MotionEvent.class, PRIORITY, this::onMotion, this);
-        EventBus.global().subscribe(StrafeEvent.class, PRIORITY, this::onStrafe, this);
-        EventBus.global().subscribe(JumpEvent.class, PRIORITY, this::onJump, this);
     }
 
     /**
      * Asks for the server to be told this rotation this tick.
      *
-     * @param speed   maximum degrees turned per tick on each axis; 180 or more is instant
-     * @param moveFix keep movement relative to the camera while rotated
+     * @param speed maximum degrees turned per tick on each axis; 180 or more is instant
      */
-    public void request(float yaw, float pitch, int priority, float speed, boolean moveFix) {
+    public void request(float yaw, float pitch, int priority, float speed) {
         if (requested && priority < requestPriority) {
             return;
         }
@@ -65,7 +58,6 @@ public final class RotationManager {
         this.targetPitch = RotationUtil.clampPitch(pitch);
         this.speed = speed;
         this.requestPriority = priority;
-        this.requestMoveFix = moveFix;
         this.requested = true;
     }
 
@@ -111,7 +103,6 @@ public final class RotationManager {
             goalYaw = targetYaw;
             goalPitch = targetPitch;
             step = speed;
-            moveFix = requestMoveFix;
         } else {
             // Nobody wants a rotation any more: ease back to where the camera is looking.
             goalYaw = player.rotationYaw;
@@ -129,7 +120,6 @@ public final class RotationManager {
         if (!requested && Math.abs(RotationUtil.yawDifference(yaw, player.rotationYaw)) < 1.0f
                 && Math.abs(pitch - player.rotationPitch) < 1.0f) {
             active = false;
-            moveFix = false;
             clearRequest();
             return;
         }
@@ -145,32 +135,5 @@ public final class RotationManager {
     private void clearRequest() {
         requested = false;
         requestPriority = Integer.MIN_VALUE;
-    }
-
-    /**
-     * Re-expresses movement input relative to the server yaw so the direction of travel is still
-     * the one the camera shows. Without this, a player aiming silently behind them runs backwards.
-     */
-    private void onStrafe(StrafeEvent event) {
-        if (!active || !moveFix) {
-            return;
-        }
-        EntityPlayerSP player = Minecraft.getMinecraft().thePlayer;
-        float offset = RotationUtil.yawDifference(serverYaw, player.rotationYaw);
-        double radians = Math.toRadians(offset);
-        float forward = event.getForward();
-        float strafe = event.getStrafe();
-        float rotatedForward = (float) (forward * Math.cos(radians) + strafe * Math.sin(radians));
-        float rotatedStrafe = (float) (strafe * Math.cos(radians) - forward * Math.sin(radians));
-        event.setForward(rotatedForward);
-        event.setStrafe(rotatedStrafe);
-        event.setYaw(serverYaw);
-    }
-
-    private void onJump(JumpEvent event) {
-        if (active && moveFix) {
-            // The sprint-jump boost follows the camera, since that is the way the player is going.
-            event.setYaw(Minecraft.getMinecraft().thePlayer.rotationYaw);
-        }
     }
 }

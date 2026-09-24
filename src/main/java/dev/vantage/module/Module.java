@@ -30,6 +30,13 @@ public abstract class Module {
     private boolean enabled;
     private boolean blatant;
 
+    /** Told about every toggle made through {@link #setEnabled}, for toggle notifications. */
+    private static volatile Consumer<Module> toggleListener;
+
+    public static void setToggleListener(Consumer<Module> listener) {
+        toggleListener = listener;
+    }
+
     protected Module(String name, Category category, String description) {
         this.name = name;
         this.category = category;
@@ -165,6 +172,10 @@ public abstract class Module {
             onEnable();
         } else {
             onDisable();
+        }
+        Consumer<Module> listener = toggleListener;
+        if (listener != null) {
+            listener.accept(this);
         }
     }
 

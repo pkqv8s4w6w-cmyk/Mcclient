@@ -117,7 +117,7 @@ public abstract class HudModule extends Module {
         GlStateManager.translate(x, y, 0.0f);
         GlStateManager.scale(elementScale, elementScale, 1.0f);
 
-        if (backdrop.value()) {
+        if (hasBackdrop()) {
             int alpha = (int) (255 * (opacityFraction()));
             RenderUtil.roundedRect(0.0f, 0.0f,
                     getContentWidth() + PADDING * 2.0f,

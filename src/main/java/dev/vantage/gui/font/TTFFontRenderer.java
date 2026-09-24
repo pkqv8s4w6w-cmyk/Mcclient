@@ -57,6 +57,8 @@ public final class TTFFontRenderer {
 
     private final float size;
     private final boolean bold;
+    private final String fontPath;
+    private final char[] onlyCharacters;
 
     private final Map<Character, Glyph> glyphs = new HashMap<Character, Glyph>();
     private int textureId = -1;
@@ -69,12 +71,25 @@ public final class TTFFontRenderer {
     public TTFFontRenderer(float size, boolean bold) {
         this.size = size;
         this.bold = bold;
+        this.fontPath = "/assets/vantage/fonts/inter.ttf";
+        this.onlyCharacters = null;
+    }
+
+    /**
+     * A renderer for a specific font and set of characters, such as the icon font, whose glyphs
+     * live in the private-use area rather than in the ranges baked by default.
+     */
+    public TTFFontRenderer(String fontPath, float size, char[] characters) {
+        this.size = size;
+        this.bold = false;
+        this.fontPath = fontPath;
+        this.onlyCharacters = characters.clone();
     }
 
     // -- baking -----------------------------------------------------------------------------
 
     private Font loadBaseFont(float pointSize) {
-        try (InputStream stream = Vantage.class.getResourceAsStream("/assets/vantage/fonts/inter.ttf")) {
+        try (InputStream stream = Vantage.class.getResourceAsStream(fontPath)) {
             if (stream != null) {
                 Font loaded = Font.createFont(Font.TRUETYPE_FONT, stream);
                 return loaded.deriveFont(bold ? Font.BOLD : Font.PLAIN, pointSize);
@@ -170,6 +185,9 @@ public final class TTFFontRenderer {
     }
 
     private char[] collectCharacters() {
+        if (onlyCharacters != null) {
+            return onlyCharacters.clone();
+        }
         StringBuilder builder = new StringBuilder();
         for (char c = 0x20; c <= 0x7E; c++) {
             builder.append(c);

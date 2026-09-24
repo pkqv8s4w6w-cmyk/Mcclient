@@ -1,7 +1,10 @@
 package dev.vantage.module;
 
 import dev.vantage.Vantage;
+import dev.vantage.event.EntityRenderEvent;
 import dev.vantage.event.EventBus;
+import dev.vantage.event.NametagEvent;
+import dev.vantage.event.Stage;
 import dev.vantage.event.Render2DEvent;
 import dev.vantage.event.Render3DEvent;
 import dev.vantage.event.TickStartEvent;
@@ -11,6 +14,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.WorldClient;
 import net.minecraftforge.client.event.ClientChatReceivedEvent;
 import net.minecraftforge.client.event.RenderGameOverlayEvent;
+import net.minecraftforge.client.event.RenderLivingEvent;
 import net.minecraftforge.client.event.RenderWorldLastEvent;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 import net.minecraftforge.fml.common.gameevent.InputEvent;
@@ -200,6 +204,28 @@ public final class ModuleManager {
             } catch (Throwable failure) {
                 disableAfterFailure(module, "onRenderWorld", failure);
             }
+        }
+    }
+
+    @SubscribeEvent
+    public void onRenderLivingPre(RenderLivingEvent.Pre<?> event) {
+        if (EventBus.global().hasListeners(EntityRenderEvent.class)) {
+            EventBus.global().post(new EntityRenderEvent(Stage.PRE, event.entity));
+        }
+    }
+
+    @SubscribeEvent
+    public void onRenderLivingPost(RenderLivingEvent.Post<?> event) {
+        if (EventBus.global().hasListeners(EntityRenderEvent.class)) {
+            EventBus.global().post(new EntityRenderEvent(Stage.POST, event.entity));
+        }
+    }
+
+    @SubscribeEvent
+    public void onRenderNametag(RenderLivingEvent.Specials.Pre<?> event) {
+        if (EventBus.global().hasListeners(NametagEvent.class)
+                && EventBus.global().post(new NametagEvent(event.entity)).isCancelled()) {
+            event.setCanceled(true);
         }
     }
 

@@ -3,22 +3,71 @@ package dev.vantage;
 import dev.vantage.combat.RotationManager;
 import dev.vantage.config.ConfigManager;
 import dev.vantage.config.FriendManager;
-import dev.vantage.module.ModuleManager;
 import dev.vantage.hud.impl.ArmourHud;
+import dev.vantage.hud.impl.ArrayListHud;
 import dev.vantage.hud.impl.CpsHud;
 import dev.vantage.hud.impl.InfoHud;
 import dev.vantage.hud.impl.KeystrokesHud;
+import dev.vantage.hud.impl.NotificationsHud;
 import dev.vantage.hud.impl.PotionHud;
+import dev.vantage.hud.impl.TargetHud;
 import dev.vantage.hud.impl.ThreatListHud;
+import dev.vantage.hud.impl.WatermarkHud;
 import dev.vantage.module.impl.analysis.CheatDetectorModule;
 import dev.vantage.module.impl.client.ClickGuiModule;
 import dev.vantage.module.impl.client.HudEditorModule;
 import dev.vantage.module.impl.client.ModsManagerModule;
+import dev.vantage.module.impl.combat.AimAssistModule;
+import dev.vantage.module.impl.combat.AntiBotModule;
+import dev.vantage.module.impl.combat.AutoClickerModule;
 import dev.vantage.module.impl.combat.BacktrackModule;
+import dev.vantage.module.impl.combat.BowAimbotModule;
+import dev.vantage.module.impl.combat.CriticalsModule;
+import dev.vantage.module.impl.combat.HitboxesModule;
+import dev.vantage.module.impl.combat.KeepSprintModule;
+import dev.vantage.module.impl.combat.KillAuraModule;
+import dev.vantage.module.impl.combat.NoClickDelayModule;
+import dev.vantage.module.impl.combat.ReachModule;
+import dev.vantage.module.impl.combat.TriggerBotModule;
+import dev.vantage.module.impl.combat.VelocityModule;
+import dev.vantage.module.impl.combat.WTapModule;
+import dev.vantage.module.impl.movement.AntiVoidModule;
+import dev.vantage.module.impl.movement.BlinkModule;
+import dev.vantage.module.impl.movement.FlyModule;
+import dev.vantage.module.impl.movement.HighJumpModule;
+import dev.vantage.module.impl.movement.InvMoveModule;
+import dev.vantage.module.impl.movement.LongJumpModule;
+import dev.vantage.module.impl.movement.NoFallModule;
+import dev.vantage.module.impl.movement.NoSlowModule;
+import dev.vantage.module.impl.movement.SafeWalkModule;
+import dev.vantage.module.impl.movement.SpeedModule;
+import dev.vantage.module.impl.movement.SpiderModule;
+import dev.vantage.module.impl.movement.StepModule;
+import dev.vantage.module.impl.movement.TargetStrafeModule;
+import dev.vantage.module.impl.movement.TimerModule;
+import dev.vantage.module.impl.movement.ToggleSprintModule;
+import dev.vantage.module.impl.player.AutoArmorModule;
+import dev.vantage.module.impl.player.AutoToolModule;
+import dev.vantage.module.impl.player.ChestStealerModule;
+import dev.vantage.module.impl.player.FastBreakModule;
+import dev.vantage.module.impl.player.FastEatModule;
+import dev.vantage.module.impl.player.FastPlaceModule;
+import dev.vantage.module.impl.player.InvManagerModule;
+import dev.vantage.module.impl.player.NoRotateModule;
+import dev.vantage.module.impl.player.ScaffoldModule;
 import dev.vantage.module.impl.utility.NickHiderModule;
-import dev.vantage.module.impl.utility.ToggleSprintModule;
 import dev.vantage.module.impl.utility.ZoomModule;
+import dev.vantage.module.impl.visual.ChamsModule;
+import dev.vantage.module.impl.visual.EspModule;
+import dev.vantage.module.impl.visual.FreecamModule;
 import dev.vantage.module.impl.visual.FullbrightModule;
+import dev.vantage.module.impl.visual.NametagsModule;
+import dev.vantage.module.impl.visual.NoHurtCamModule;
+import dev.vantage.module.impl.visual.StorageEspModule;
+import dev.vantage.module.impl.visual.TimeChangerModule;
+import dev.vantage.module.impl.visual.TracersModule;
+import dev.vantage.module.impl.visual.TrajectoriesModule;
+import dev.vantage.module.ModuleManager;
 import net.minecraft.client.Minecraft;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.fml.common.FMLCommonHandler;
@@ -114,26 +163,78 @@ public class Vantage {
 
     private void registerModules() {
         moduleManager.registerAll(
+                // Combat
+                new KillAuraModule(),
+                new AimAssistModule(),
+                new AutoClickerModule(),
+                new TriggerBotModule(),
+                new ReachModule(),
+                new VelocityModule(),
+                new HitboxesModule(),
+                new CriticalsModule(),
+                new WTapModule(),
+                new KeepSprintModule(),
+                new BowAimbotModule(),
+                new BacktrackModule(),
+                new NoClickDelayModule(),
+                new AntiBotModule(),
+                // Movement
+                new ToggleSprintModule(),
+                new SpeedModule(),
+                new FlyModule(),
+                new LongJumpModule(),
+                new HighJumpModule(),
+                new StepModule(),
+                new NoFallModule(),
+                new NoSlowModule(),
+                new SafeWalkModule(),
+                new InvMoveModule(),
+                new AntiVoidModule(),
+                new TimerModule(),
+                new BlinkModule(),
+                new SpiderModule(),
+                new TargetStrafeModule(),
+                // Player
+                new ScaffoldModule(),
+                new FastPlaceModule(),
+                new FastBreakModule(),
+                new AutoToolModule(),
+                new ChestStealerModule(),
+                new InvManagerModule(),
+                new AutoArmorModule(),
+                new FastEatModule(),
+                new NoRotateModule(),
+                // Visuals
+                new EspModule(),
+                new NametagsModule(),
+                new TracersModule(),
+                new ChamsModule(),
+                new StorageEspModule(),
+                new TrajectoriesModule(),
+                new FreecamModule(),
+                new NoHurtCamModule(),
+                new TimeChangerModule(),
+                new FullbrightModule(),
                 // Analysis
                 new ThreatListHud(),
                 new CheatDetectorModule(),
-                // Combat
-                new BacktrackModule(),
                 // HUD
+                new ArrayListHud(),
+                new WatermarkHud(),
+                new TargetHud(),
+                new NotificationsHud(),
                 new KeystrokesHud(),
                 new CpsHud(),
                 new InfoHud(),
                 new ArmourHud(),
                 new PotionHud(),
-                // Utility and visual
+                // Misc
                 new ZoomModule(),
-                new ToggleSprintModule(),
                 new NickHiderModule(),
-                new FullbrightModule(),
+                new ModsManagerModule(),
                 // Client
                 new ClickGuiModule(),
-                new HudEditorModule(),
-                new ModsManagerModule());
+                new HudEditorModule());
     }
 
     public void loadConfig() {
