@@ -1,6 +1,5 @@
 # Vantage
 
-<<<<<<< claude/sleepy-goodall-2rwke6
 A Minecraft 1.8.9 Forge client for Bedwars: combat, movement and render modules on the level of the
 big cheat clients, six Bedwars modules that no other client has, a threat ranking and cheat detector,
 and a menu in the style of Prestige.
@@ -8,9 +7,6 @@ and a menu in the style of Prestige.
 **This build is for a private, whitelisted server** where everyone has agreed that any modification
 is allowed. Most of it is bannable anywhere else. There are no anticheat bypasses or disablers in it:
 the modes are tuned against a vanilla or Spigot server's own movement checks and nothing more.
-=======
-A Minecraft 1.8.9 Forge client to give users an advantage.
->>>>>>> claude/minecraft-client-build-gsyly0
 
 ## Getting started
 
@@ -36,10 +32,41 @@ laid out on a fixed canvas and scaled to fit, so it looks the same at every GUI 
 
 ## Modules
 
-<<<<<<< claude/sleepy-goodall-2rwke6
 Tagged **Blatant** in the menu where the advantage is obvious to anyone watching.
 
 **Combat**
+
+A Minecraft 1.8.9 Forge client for Bedwars: combat, movement and render modules on the level of the
+big cheat clients, six Bedwars modules that no other client has, a threat ranking and cheat detector,
+and a menu in the style of Prestige.
+
+**This build is for a private, whitelisted server** where everyone has agreed that any modification
+is allowed. Most of it is bannable anywhere else. There are no anticheat bypasses or disablers in it:
+the modes are tuned against a vanilla or Spigot server's own movement checks and nothing more.
+
+## Getting started
+
+1. Build with `./gradlew build` (JDK 17 or newer) and drop `build/libs/vantage-1.0.0.jar` into
+   `.minecraft/mods` on a 1.8.9 Forge profile (`11.15.1.2318` or compatible).
+2. Press **Right Shift** for the menu. Start typing anywhere in it to search.
+3. Click a module's switch to turn it on; click the card itself to open its settings. Every card ends
+   with a **Keybind** row for binding that module to a key.
+4. Press **Right Control** for the HUD editor. Drag elements into place; scroll over one to resize it.
+
+## The menu
+
+A sidebar of categories and pages on the left, each with an icon and a line saying what it holds,
+and the page on the right. Module pages have an **All / Enabled / Disabled** filter. The window is
+laid out on a fixed canvas and scaled to fit, so it looks the same at every GUI scale.
+
+| Page | What it is for |
+|---|---|
+| Configs | Apply, create and delete profiles. **Share** copies a profile to the clipboard; a friend presses **Import** to load it |
+| Friends | Players every combat module leaves alone. Add by name, or switch on middle-click to add whoever you are looking at |
+| Themes | Six presets (Prestige, Midnight, Rose, Mint, Sunset, Mono), each drawn as a small preview of the menu, and every colour on its own below |
+| Settings | Menu key, backdrop (dim, gradient, blur or none), UI scale, the HUD editor, the Mods Manager, and **Panic**, which switches everything off |
+
+## Modules
 
 | Module | What it does |
 |---|---|
@@ -57,8 +84,6 @@ Tagged **Blatant** in the menu where the advantage is obvious to anyone watching
 | Backtrack | Pins nearby enemies where they were so you can still hit them after they move. More below |
 | No Click Delay | Removes the half-second lockout after a missed click |
 | AntiBot | Keeps combat modules off NPCs and fake players |
-=======
-## Building
 >>>>>>> claude/minecraft-client-build-gsyly0
 
 Every combat module shares the same target settings: players, mobs, animals, invisibles, ignore
