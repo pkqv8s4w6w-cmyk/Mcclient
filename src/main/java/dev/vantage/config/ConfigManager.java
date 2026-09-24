@@ -102,7 +102,7 @@ public final class ConfigManager {
         JsonObject moduleTree = new JsonObject();
         for (Module module : modules) {
             JsonObject entry = new JsonObject();
-            entry.addProperty("enabled", module.isEnabled());
+            entry.addProperty("enabled", module.isEnabledForSave());
             entry.addProperty("keybind", module.getKeybind().get());
 
             JsonObject settingTree = new JsonObject();

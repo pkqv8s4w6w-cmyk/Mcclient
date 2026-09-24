@@ -34,8 +34,8 @@ public class NotificationsHud extends HudModule {
     }
 
     @Override
-    public boolean hasBackdrop() {
-        return false;
+    protected boolean drawsOwnPanel() {
+        return true;
     }
 
     @Override

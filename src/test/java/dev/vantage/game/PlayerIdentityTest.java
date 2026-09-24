@@ -71,4 +71,20 @@ class PlayerIdentityTest {
         long most = (0x0123456789ABCDEFL & ~0xF000L) | ((long) version << 12);
         return new UUID(most, 0x89ABCDEF01234567L);
     }
+
+    @Test
+    void onAnOfflineServerRealPlayersWithVersionThreeUuidsAreKept() {
+        UUID offlinePlayer = UUID.nameUUIDFromBytes("OfflinePlayer:Steve".getBytes(StandardCharsets.UTF_8));
+        assertFalse(PlayerIdentity.isRealAccount(offlinePlayer, "Steve"));
+        assertTrue(PlayerIdentity.isRealAccount(offlinePlayer, "Steve", true));
+        // The name rule still applies there.
+        assertFalse(PlayerIdentity.isRealAccount(offlinePlayer, "\u00a7cShop", true));
+    }
+
+    @Test
+    void yourOwnUuidSaysWhetherTheServerIsOffline() {
+        assertTrue(PlayerIdentity.isOfflineServer(npc("OfflinePlayer:You")));
+        assertFalse(PlayerIdentity.isOfflineServer(account()));
+        assertFalse(PlayerIdentity.isOfflineServer(null));
+    }
 }

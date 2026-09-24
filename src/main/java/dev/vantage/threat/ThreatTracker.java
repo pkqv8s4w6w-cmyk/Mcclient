@@ -177,7 +177,10 @@ public final class ThreatTracker {
         // The tab list alone is not a lobby. In a hub it carries everyone standing around, which
         // is how unrelated names ended up in the list; the scoreboard title is what says whether
         // there is a game to list at all. Inside one, the tab list is exactly the participants.
-        boolean titleSaysBedwars = GameDetector.isBedwars(LobbyReader.readSidebarTitle());
+        // Hypixel titles its board BED WARS; other plugins may not, but a world with several beds in
+        // it is a Bedwars map whatever the board says.
+        boolean titleSaysBedwars = GameDetector.isBedwars(LobbyReader.readSidebarTitle())
+                || dev.vantage.game.BedTracker.get().getBeds().size() >= 2;
         if (titleSaysBedwars) {
             lastInGameMillis = now;
         } else if (now - lastInGameMillis < GAME_GRACE_MILLIS) {

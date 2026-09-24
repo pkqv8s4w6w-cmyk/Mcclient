@@ -1,5 +1,7 @@
 package dev.vantage.module.impl.utility;
 
+import dev.vantage.event.SaveOptionsEvent;
+import dev.vantage.event.Stage;
 import dev.vantage.module.Category;
 import dev.vantage.module.Module;
 import dev.vantage.setting.BooleanSetting;
@@ -24,23 +26,34 @@ public class ZoomModule extends Module {
 
     public ZoomModule() {
         super("Zoom", Category.UTILITY, "Hold a key to zoom in");
+        // A zoomed field of view must never be what gets written to options.txt.
+        on(SaveOptionsEvent.class, event -> {
+            if (!zooming) {
+                return;
+            }
+            Minecraft mc = Minecraft.getMinecraft();
+            if (event.getStage() == Stage.PRE) {
+                mc.gameSettings.fovSetting = originalFov;
+                mc.gameSettings.mouseSensitivity = originalSensitivity;
+            } else {
+                applyZoom(mc);
+            }
+        });
     }
 
     @Override
     public void onTick() {
-        boolean held = zoomKey.isBound() && Keyboard.isKeyDown(zoomKey.get());
+        // Only with no screen open: the key is a letter, and typing it in chat must not zoom.
+        Minecraft mc = Minecraft.getMinecraft();
+        boolean held = zoomKey.isBound() && mc.currentScreen == null && Keyboard.isKeyDown(zoomKey.get());
         if (held == zooming) {
             return;
         }
         zooming = held;
-        Minecraft mc = Minecraft.getMinecraft();
         if (held) {
             originalFov = mc.gameSettings.fovSetting;
             originalSensitivity = mc.gameSettings.mouseSensitivity;
-            mc.gameSettings.fovSetting = (float) (originalFov / level.asDouble());
-            if (slowMouse.value()) {
-                mc.gameSettings.mouseSensitivity = (float) (originalSensitivity / level.asDouble());
-            }
+            applyZoom(mc);
         } else {
             restore(mc);
         }
@@ -51,6 +64,13 @@ public class ZoomModule extends Module {
         if (zooming) {
             restore(Minecraft.getMinecraft());
             zooming = false;
+        }
+    }
+
+    private void applyZoom(Minecraft mc) {
+        mc.gameSettings.fovSetting = (float) (originalFov / level.asDouble());
+        if (slowMouse.value()) {
+            mc.gameSettings.mouseSensitivity = (float) (originalSensitivity / level.asDouble());
         }
     }
 

@@ -56,6 +56,7 @@ public final class LobbyReader {
             return players;
         }
         UUID own = mc.thePlayer == null ? null : mc.thePlayer.getGameProfile().getId();
+        boolean offlineServer = PlayerIdentity.isOfflineServer(own);
         for (NetworkPlayerInfo info : infoMap) {
             GameProfile profile = info.getGameProfile();
             if (profile == null || profile.getId() == null || profile.getName() == null) {
@@ -63,7 +64,7 @@ public final class LobbyReader {
             }
             // Never filter yourself out, whatever your profile looks like.
             if (!profile.getId().equals(own)
-                    && !PlayerIdentity.isRealAccount(profile.getId(), profile.getName())) {
+                    && !PlayerIdentity.isRealAccount(profile.getId(), profile.getName(), offlineServer)) {
                 continue;
             }
             players.add(new LobbyPlayer(profile.getId(), profile.getName(), info.getResponseTime()));

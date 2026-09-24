@@ -40,12 +40,30 @@ public final class PlayerIdentity {
      * that produces offline-mode UUIDs. So any version but 4 means the entry was manufactured.
      */
     public static boolean isRealAccount(UUID uuid, String name) {
+        return isRealAccount(uuid, name, false);
+    }
+
+    /**
+     * As {@link #isRealAccount(UUID, String)}, for a server that may be in offline mode.
+     *
+     * <p>An offline-mode server derives every player's UUID from their name, which stamps version 3
+     * on real players and NPCs alike. There the version says nothing, and only the name rule is
+     * left to go on.
+     *
+     * @param offlineServer true when the server does not use Mojang accounts
+     */
+    public static boolean isRealAccount(UUID uuid, String name, boolean offlineServer) {
         if (uuid == null || name == null) {
             return false;
         }
         if (!VALID_NAME.matcher(name).matches()) {
             return false;
         }
-        return uuid.version() == MOJANG_UUID_VERSION;
+        return offlineServer || uuid.version() == MOJANG_UUID_VERSION;
+    }
+
+    /** Your own UUID says which kind of server this is: Mojang only ever issues version 4. */
+    public static boolean isOfflineServer(UUID own) {
+        return own != null && own.version() != MOJANG_UUID_VERSION;
     }
 }

@@ -29,6 +29,7 @@ public abstract class Module {
 
     private boolean enabled;
     private boolean blatant;
+    private boolean rememberEnabled = true;
 
     /** Told about every toggle made through {@link #setEnabled}, for toggle notifications. */
     private static volatile Consumer<Module> toggleListener;
@@ -74,6 +75,20 @@ public abstract class Module {
 
     public boolean isBlatant() {
         return blatant;
+    }
+
+    /**
+     * Saves this module as off whatever its state. For modules whose enable hook does setup that a
+     * profile load cannot - Freecam leaving a body behind, Blink marking where it started - so they
+     * never come back on half-initialised.
+     */
+    protected final void forgetEnabledOnSave() {
+        rememberEnabled = false;
+    }
+
+    /** The enabled state to write to a profile. */
+    public boolean isEnabledForSave() {
+        return enabled && rememberEnabled;
     }
 
     /**

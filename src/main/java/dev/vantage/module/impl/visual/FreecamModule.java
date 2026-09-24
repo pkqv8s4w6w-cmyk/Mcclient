@@ -33,6 +33,7 @@ public class FreecamModule extends Module {
 
     public FreecamModule() {
         super("Freecam", Category.VISUAL, "Fly the camera around while your body stays put");
+        forgetEnabledOnSave();
         on(PacketEvent.Send.class, event -> {
             if (event.getPacket() instanceof C03PacketPlayer || event.getPacket() instanceof C0BPacketEntityAction) {
                 event.cancel();

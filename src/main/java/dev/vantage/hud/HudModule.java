@@ -43,8 +43,10 @@ public abstract class HudModule extends Module {
     /** For elements that belong somewhere other than the HUD list, such as the threat ranking. */
     protected HudModule(String name, Category category, String description) {
         super(name, category, description);
-        // The opacity slider is meaningless with no panel to fade, so hide it when off.
-        opacity.visibleWhen(backdrop::value);
+        // The opacity slider is meaningless with no panel to fade, and neither setting applies to
+        // an element that draws its own card.
+        backdrop.visibleWhen(() -> !drawsOwnPanel());
+        opacity.visibleWhen(() -> backdrop.value() && !drawsOwnPanel());
     }
 
     /** Size of the drawn content, before scaling and before any backing panel. */
@@ -65,7 +67,12 @@ public abstract class HudModule extends Module {
     }
 
     public boolean hasBackdrop() {
-        return backdrop.value();
+        return backdrop.value() && !drawsOwnPanel();
+    }
+
+    /** Elements that draw their own card, such as the target HUD, return true to skip the panel. */
+    protected boolean drawsOwnPanel() {
+        return false;
     }
 
     // -- placement --------------------------------------------------------------------------

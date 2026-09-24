@@ -1,5 +1,7 @@
 package dev.vantage.module.impl.combat;
 
+import dev.vantage.Vantage;
+import dev.vantage.game.TeamResolver;
 import dev.vantage.module.Category;
 import dev.vantage.module.Module;
 import dev.vantage.net.PacketDelayer;
@@ -140,7 +142,13 @@ public class BacktrackModule extends Module {
         double hurtLimit = maxHurtTime.asDouble();
 
         Set<Integer> targets = new HashSet<Integer>();
+        AntiBotModule antiBot = Vantage.instance().modules().get(AntiBotModule.class);
         for (EntityPlayer player : otherPlayers(mc)) {
+            // Holding a teammate or a friend only makes them stutter on your screen for nothing.
+            if (TeamResolver.isTeammate(player) || Vantage.instance().friends().isFriend(player.getName())
+                    || (antiBot != null && antiBot.isEnabled() && antiBot.isBot(player))) {
+                continue;
+            }
             double distance = mc.thePlayer.getDistanceToEntity(player);
             if (distance < min || distance > max) {
                 continue;

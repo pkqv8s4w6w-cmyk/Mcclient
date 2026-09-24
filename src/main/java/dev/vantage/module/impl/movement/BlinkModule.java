@@ -40,6 +40,7 @@ public class BlinkModule extends Module {
 
     public BlinkModule() {
         super("Blink", Category.MOVEMENT, "Freeze where you are for everyone else, then catch up");
+        forgetEnabledOnSave();
         markBlatant();
         pulseDelay.visibleWhen(pulse::value);
         on(PacketEvent.Send.class, this::onSend);

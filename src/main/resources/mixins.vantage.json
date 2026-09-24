@@ -12,6 +12,8 @@
     "MixinEntityLivingBase",
     "MixinEntityPlayerSP",
     "MixinEntityRenderer",
+    "MixinGameSettings",
+    "MixinMinecraft",
     "MixinNetworkManager",
     "MixinPlayerControllerMP",
     "accessor.C03PacketPlayerAccessor",

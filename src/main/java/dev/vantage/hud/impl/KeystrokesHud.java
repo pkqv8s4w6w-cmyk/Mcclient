@@ -1,5 +1,6 @@
 package dev.vantage.hud.impl;
 
+import dev.vantage.event.ClickEvent;
 import dev.vantage.gui.Theme;
 import dev.vantage.gui.font.Fonts;
 import dev.vantage.gui.render.RenderUtil;
@@ -22,28 +23,11 @@ public class KeystrokesHud extends HudModule {
 
     private final CpsMeter left = new CpsMeter();
     private final CpsMeter right = new CpsMeter();
-    private boolean leftWasDown;
-    private boolean rightWasDown;
-
     public KeystrokesHud() {
         super("Keystrokes", "Shows movement keys and mouse buttons");
         showCps.visibleWhen(showMouse::value);
-    }
-
-    @Override
-    public void onTick() {
-        Minecraft mc = Minecraft.getMinecraft();
-        long now = System.currentTimeMillis();
-        boolean leftDown = mc.gameSettings.keyBindAttack.isKeyDown();
-        if (leftDown && !leftWasDown) {
-            left.click(now);
-        }
-        leftWasDown = leftDown;
-        boolean rightDown = mc.gameSettings.keyBindUseItem.isKeyDown();
-        if (rightDown && !rightWasDown) {
-            right.click(now);
-        }
-        rightWasDown = rightDown;
+        // Counted from the clicks the game handles, so fast clicking is not undercounted.
+        on(ClickEvent.class, event -> (event.isLeft() ? left : right).click(System.currentTimeMillis()));
     }
 
     @Override

@@ -293,6 +293,17 @@ public class Vantage {
 
     public void switchProfile(String profile) {
         saveConfig();
+        // Switch everything off properly first. Resetting only clears the flags, which would leave
+        // a running Timer, Fly or Zoom holding the game state it changed.
+        for (dev.vantage.module.Module module : moduleManager.getModules()) {
+            if (module.isEnabled()) {
+                try {
+                    module.setEnabled(false);
+                } catch (RuntimeException failure) {
+                    LOGGER.warn("[{}] {} did not switch off cleanly", MOD_NAME, module.getName(), failure);
+                }
+            }
+        }
         try {
             activeProfile = ConfigManager.sanitiseProfileName(profile);
             configManager.setActiveProfile(activeProfile);
