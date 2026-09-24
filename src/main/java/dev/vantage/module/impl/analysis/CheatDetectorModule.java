@@ -18,6 +18,7 @@ import dev.vantage.game.LobbyReader;
 import dev.vantage.game.TeamColour;
 import dev.vantage.module.Category;
 import dev.vantage.module.Module;
+import dev.vantage.net.PacketDelayer;
 import dev.vantage.net.PacketObserver;
 import dev.vantage.setting.BooleanSetting;
 import dev.vantage.setting.NumberSetting;
@@ -266,7 +267,9 @@ public class CheatDetectorModule extends Module {
             EntityPlayer attacker = mostRecentSwinger(others, now);
             if (attacker != null) {
                 sessionFor(attacker.getEntityId()).exchange(now);
-                if (combat.value()) {
+                // While this client's own Backtrack holds the attacker, the position on screen is
+                // where they were, not where they swung from, so the distance would read as reach.
+                if (combat.value() && !PacketDelayer.instance().isDistorting(attacker.getEntityId())) {
                     trackFor(attacker.getEntityId()).recordHitOnYou(measureHit(mc, attacker));
                 }
             }
@@ -304,9 +307,13 @@ public class CheatDetectorModule extends Module {
         if (pending != null) {
             pending[0] -= 1.0;
             if (pending[0] <= 0.0) {
-                double dx = player.posX - pending[1];
-                double dz = player.posZ - pending[2];
-                trackFor(id).recordHitDisplacement(Math.sqrt(dx * dx + dz * dz));
+                // A player pinned by this client's Backtrack has not moved on screen no matter how
+                // far they were knocked, and counting that would flag them for anti-knockback.
+                if (!PacketDelayer.instance().isDistorting(id)) {
+                    double dx = player.posX - pending[1];
+                    double dz = player.posZ - pending[2];
+                    trackFor(id).recordHitDisplacement(Math.sqrt(dx * dx + dz * dz));
+                }
                 pendingKnockback.remove(id);
             }
             return;
@@ -359,8 +366,12 @@ public class CheatDetectorModule extends Module {
         double travelled = Math.sqrt(dx * dx + dz * dz);
 
         // A step this large is the server repositioning them, not the player moving. Marking it
-        // lets the check discard the pair rather than reading it as impossible movement.
-        boolean teleported = travelled > 8.0;
+        // lets every movement check discard the pair rather than reading it as impossible speed.
+        //
+        // Backtrack distorts movement the same way from this end: a player whose packets are being
+        // held stalls and then catches up in one tick, which reads as a jump in facing versus
+        // travel. The same discard handles it.
+        boolean teleported = travelled > 8.0 || PacketDelayer.instance().isDistorting(id);
 
         Vec3 look = player.getLook(1.0f);
         double lookLength = Math.sqrt(look.xCoord * look.xCoord + look.zCoord * look.zCoord);

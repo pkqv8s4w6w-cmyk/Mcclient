@@ -4,6 +4,7 @@ package dev.vantage.module;
 public enum Category {
 
     ANALYSIS("Analysis", "Threat ranking and cheat detection"),
+    COMBAT("Combat", "Fighting other players"),
     VISUAL("Visual", "Rendering and world appearance"),
     HUD("HUD", "On-screen information"),
     UTILITY("Utility", "Quality of life"),
