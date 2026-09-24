@@ -183,6 +183,31 @@ public abstract class Module {
         syncListeners();
     }
 
+    /**
+     * Switches off after a failure without running the disable hook. Handlers stop at once.
+     *
+     * @return whether the module was on, and so whether {@link #runDisableHook} is owed
+     */
+    final boolean stopAfterFailure() {
+        boolean wasEnabled = enabled;
+        enabled = false;
+        syncListeners();
+        return wasEnabled;
+    }
+
+    /**
+     * Runs the disable hook for a module stopped by {@link #stopAfterFailure}, so one that changed
+     * game state - the timer, flight, the FOV - still puts it back. A failure here is swallowed; the
+     * original one has already been reported.
+     */
+    final void runDisableHook() {
+        try {
+            onDisable();
+        } catch (Throwable ignored) {
+            // Nothing more can be done for it.
+        }
+    }
+
     protected void onEnable() {
     }
 

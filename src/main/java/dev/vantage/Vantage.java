@@ -1,6 +1,8 @@
 package dev.vantage;
 
+import dev.vantage.combat.RotationManager;
 import dev.vantage.config.ConfigManager;
+import dev.vantage.config.FriendManager;
 import dev.vantage.module.ModuleManager;
 import dev.vantage.hud.impl.ArmourHud;
 import dev.vantage.hud.impl.CpsHud;
@@ -55,6 +57,7 @@ public class Vantage {
 
     private ModuleManager moduleManager;
     private ConfigManager configManager;
+    private FriendManager friendManager;
     private String activeProfile = "default";
 
     public static Vantage instance() {
@@ -69,6 +72,10 @@ public class Vantage {
         return configManager;
     }
 
+    public FriendManager friends() {
+        return friendManager;
+    }
+
     public String getActiveProfile() {
         return activeProfile;
     }
@@ -77,6 +84,7 @@ public class Vantage {
     public void preInit(FMLPreInitializationEvent event) {
         Path dataDirectory = Minecraft.getMinecraft().mcDataDir.toPath().resolve(MOD_ID);
         configManager = new ConfigManager(dataDirectory);
+        friendManager = new FriendManager(dataDirectory.resolve("friends.json"));
         moduleManager = new ModuleManager();
         LOGGER.info("[{}] pre-init, version {}, data at {}", MOD_NAME, VERSION, dataDirectory);
     }
@@ -88,8 +96,14 @@ public class Vantage {
         MinecraftForge.EVENT_BUS.register(moduleManager);
         FMLCommonHandler.instance().bus().register(moduleManager);
 
+        RotationManager.get().install();
         registerModules();
         loadConfig();
+        try {
+            friendManager.load();
+        } catch (IOException failure) {
+            LOGGER.error("[{}] could not read the friends list", MOD_NAME, failure);
+        }
 
         // The client has no reliable shutdown event, and Minecraft can exit without unwinding, so
         // persist on JVM shutdown as well as on the explicit saves the GUI performs.
@@ -141,6 +155,13 @@ public class Vantage {
             configManager.save(activeProfile, moduleManager.getModules());
         } catch (IOException failure) {
             LOGGER.error("[{}] could not write profile '{}'", MOD_NAME, activeProfile, failure);
+        }
+        if (friendManager != null) {
+            try {
+                friendManager.save();
+            } catch (IOException failure) {
+                LOGGER.error("[{}] could not write the friends list", MOD_NAME, failure);
+            }
         }
     }
 

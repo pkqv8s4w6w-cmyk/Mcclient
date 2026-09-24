@@ -1,6 +1,12 @@
 package dev.vantage.module;
 
 import dev.vantage.Vantage;
+import dev.vantage.event.EventBus;
+import dev.vantage.event.Render2DEvent;
+import dev.vantage.event.Render3DEvent;
+import dev.vantage.event.TickStartEvent;
+import dev.vantage.game.BedTracker;
+import dev.vantage.gui.render.Render3D;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.WorldClient;
 import net.minecraftforge.client.event.ClientChatReceivedEvent;
@@ -30,6 +36,19 @@ public final class ModuleManager {
     private final List<Module> modules = new ArrayList<>();
     private WorldClient lastWorld;
     private final Map<String, Module> byConfigKey = new LinkedHashMap<>();
+    private final Map<Class<?>, Module> byClass = new LinkedHashMap<>();
+
+    public ModuleManager() {
+        // A handler that throws is switched off with its module, the same as one that throws in a
+        // tick, rather than failing again on every packet.
+        EventBus.global().setFailureHandler((owner, failure) -> {
+            if (owner instanceof Module) {
+                disableAfterFailure((Module) owner, "an event handler", failure);
+            } else {
+                Vantage.LOGGER.error("An event handler threw and has been removed", failure);
+            }
+        });
+    }
 
     public void register(Module module) {
         String key = module.getConfigKey();
@@ -38,6 +57,19 @@ public final class ModuleManager {
         }
         modules.add(module);
         byConfigKey.put(key, module);
+        byClass.put(module.getClass(), module);
+    }
+
+    /** The registered instance of a module class, or null if it is not registered. */
+    @SuppressWarnings("unchecked")
+    public <T extends Module> T get(Class<T> type) {
+        return (T) byClass.get(type);
+    }
+
+    /** Whether a module is registered and on, for code that only needs to know that much. */
+    public boolean isEnabled(Class<? extends Module> type) {
+        Module module = byClass.get(type);
+        return module != null && module.isEnabled();
     }
 
     public void registerAll(Module... toRegister) {
@@ -88,6 +120,13 @@ public final class ModuleManager {
 
     @SubscribeEvent
     public void onClientTick(TickEvent.ClientTickEvent event) {
+        if (event.phase == TickEvent.Phase.START) {
+            Minecraft start = Minecraft.getMinecraft();
+            if (start.theWorld != null && start.thePlayer != null) {
+                EventBus.global().post(TickStartEvent.INSTANCE);
+            }
+            return;
+        }
         if (event.phase != TickEvent.Phase.END) {
             return;
         }
@@ -108,6 +147,11 @@ public final class ModuleManager {
                 }
             }
         }
+        try {
+            BedTracker.get().tick();
+        } catch (Throwable failure) {
+            Vantage.LOGGER.error("Bed tracking failed this tick", failure);
+        }
         for (int i = 0; i < modules.size(); i++) {
             Module module = modules.get(i);
             if (!module.isEnabled()) {
@@ -126,6 +170,8 @@ public final class ModuleManager {
         if (event.type != RenderGameOverlayEvent.ElementType.ALL) {
             return;
         }
+        EventBus.global().post(new Render2DEvent(event.partialTicks,
+                event.resolution.getScaledWidth(), event.resolution.getScaledHeight()));
         for (int i = 0; i < modules.size(); i++) {
             Module module = modules.get(i);
             if (!module.isEnabled()) {
@@ -141,6 +187,9 @@ public final class ModuleManager {
 
     @SubscribeEvent
     public void onRenderWorld(RenderWorldLastEvent event) {
+        // Kept for the overlay, which projects world positions to the screen after this.
+        Render3D.captureMatrices();
+        EventBus.global().post(new Render3DEvent(event.partialTicks));
         for (int i = 0; i < modules.size(); i++) {
             Module module = modules.get(i);
             if (!module.isEnabled()) {
@@ -218,6 +267,14 @@ public final class ModuleManager {
      */
     private void disableAfterFailure(Module module, String hook, Throwable failure) {
         Vantage.LOGGER.error("Module '{}' threw in {} and has been disabled", module.getName(), hook, failure);
-        module.setEnabledSilently(false);
+        if (!module.stopAfterFailure()) {
+            return;
+        }
+        if (Minecraft.getMinecraft().isCallingFromMinecraftThread()) {
+            module.runDisableHook();
+        } else {
+            // Packet handlers fail on the network thread, and the disable hook touches the game.
+            Minecraft.getMinecraft().addScheduledTask(module::runDisableHook);
+        }
     }
 }
