@@ -122,6 +122,16 @@ public final class TargetFinder {
         return Math.sqrt(dx * dx + dy * dy + dz * dz);
     }
 
+    /**
+     * Whether the server will take a hit on this target from where you stand. It measures feet to
+     * feet rather than eyes to box, and allows six blocks when you can see the target but only three
+     * through a wall; anything else is dropped without a word.
+     */
+    public static boolean serverAccepts(EntityPlayerSP self, Entity target) {
+        double limit = self.canEntityBeSeen(target) ? 6.0 : 3.0;
+        return self.getDistanceSqToEntity(target) < limit * limit;
+    }
+
     /** How far off the crosshair a target is, in degrees. */
     public static float angleTo(EntityPlayerSP self, Entity target) {
         float[] wanted = aimAt(self, target, 0.5);

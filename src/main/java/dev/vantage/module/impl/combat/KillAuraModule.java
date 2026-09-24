@@ -169,13 +169,14 @@ public class KillAuraModule extends Module {
         boolean hitSomething = false;
         if (mode.get() == Mode.MULTI) {
             for (EntityLivingBase each : inRange) {
-                if (TargetFinder.distanceToBox(player, each) <= range.asDouble()) {
+                if (TargetFinder.distanceToBox(player, each) <= range.asDouble() && TargetFinder.serverAccepts(player, each)) {
                     releaseBlockForHit();
                     CombatUtil.attack(each, swing.value());
                     hitSomething = true;
                 }
             }
-        } else if (TargetFinder.distanceToBox(player, target) <= range.asDouble() && rotationOnTarget(player)) {
+        } else if (TargetFinder.distanceToBox(player, target) <= range.asDouble()
+                && TargetFinder.serverAccepts(player, target) && rotationOnTarget(player)) {
             releaseBlockForHit();
             CombatUtil.attack(target, swing.value());
             hitSomething = true;
