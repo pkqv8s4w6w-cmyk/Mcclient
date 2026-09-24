@@ -56,6 +56,10 @@ public class ProjectileForecastModule extends Module {
             "Fireball Radius", "Blast radius to assume for fireballs", 3.0, 1.0, 6.0, 0.5, "m"));
     private final NumberSetting tntRadius = register(new NumberSetting(
             "TNT Radius", "Blast radius to assume for TNT", 4.0, 1.0, 8.0, 0.5, "m"));
+    private final NumberSetting tntFuse = register(new NumberSetting(
+            "TNT Fuse", "How long lit TNT takes to go off on your server; vanilla is 4 seconds. "
+                    + "The server never tells the client, so this is counted from when it appears",
+            4.0, 0.5, 8.0, 0.1, "s"));
     private final BooleanSetting deflect = register(new BooleanSetting(
             "Auto Deflect", "Hit incoming fireballs back", false));
 
@@ -125,8 +129,8 @@ public class ProjectileForecastModule extends Module {
                         fireball.accelerationX, fireball.accelerationY, fireball.accelerationZ, MAX_TICKS, -64.0, collider);
                 forecasts.add(new Forecast(entity, path, fireballRadius.asDouble(), Theme.danger(), "Fireball", path.ticks / 20.0));
             } else if (tnt.value() && entity instanceof EntityTNTPrimed) {
-                EntityTNTPrimed primed = (EntityTNTPrimed) entity;
-                forecasts.add(new Forecast(entity, null, tntRadius.asDouble(), Theme.warning(), "TNT", Math.max(0, primed.fuse) / 20.0));
+                double remaining = Math.max(0.0, tntFuse.asDouble() - entity.ticksExisted / 20.0);
+                forecasts.add(new Forecast(entity, null, tntRadius.asDouble(), Theme.warning(), "TNT", remaining));
             }
         }
         throwers.keySet().removeIf(id -> mc.theWorld.getEntityByID(id) == null);
