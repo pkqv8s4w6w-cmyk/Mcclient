@@ -144,8 +144,20 @@ public final class TargetFinder {
      * @param height where on the body to aim, 0 feet to 1 head
      */
     public static float[] aimAt(EntityPlayerSP self, Entity target, double height) {
-        Vec3 eyes = self.getPositionEyes(1.0f);
-        AxisAlignedBB box = target.getEntityBoundingBox();
+        return aimAt(self, target, height, 1.0f);
+    }
+
+    /**
+     * Like {@link #aimAt(EntityPlayerSP, Entity, double)}, but at where both players are drawn
+     * this frame rather than where they were at the last tick. For anything that turns the camera
+     * between ticks, so it aims at the model on screen instead of slightly ahead of it.
+     */
+    public static float[] aimAt(EntityPlayerSP self, Entity target, double height, float partialTicks) {
+        Vec3 eyes = self.getPositionEyes(partialTicks);
+        AxisAlignedBB box = target.getEntityBoundingBox().offset(
+                (target.lastTickPosX - target.posX) * (1.0 - partialTicks),
+                (target.lastTickPosY - target.posY) * (1.0 - partialTicks),
+                (target.lastTickPosZ - target.posZ) * (1.0 - partialTicks));
         double x = (box.minX + box.maxX) / 2.0;
         double z = (box.minZ + box.maxZ) / 2.0;
         // Aim at the part of the body level with the eyes when it is in range, which is what a
