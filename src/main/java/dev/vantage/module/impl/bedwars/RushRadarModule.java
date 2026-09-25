@@ -17,6 +17,9 @@ import dev.vantage.module.Category;
 import dev.vantage.notify.Notifications;
 import dev.vantage.setting.BooleanSetting;
 import dev.vantage.setting.NumberSetting;
+import net.minecraft.block.Block;
+import net.minecraft.block.BlockBed;
+import net.minecraft.block.state.IBlockState;
 import net.minecraft.client.Minecraft;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.init.Blocks;
@@ -36,17 +39,25 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 /**
  * Warns you when someone is bridging toward your bed, and when they will get there.
  *
- * <p>Every block that appears is credited to the enemy standing next to it, since a bridge is
- * built from its own end. {@link BridgeTracker} then decides which of those runs are rushes. The
- * panel lists them soonest first, and the bridge head is marked in the world.
+ * <p>Every solid block that appears is credited to the enemy who could have just placed it: one
+ * standing over it or right beside it, since a bridge is built from its own end under the builder's
+ * feet. {@link BridgeTracker} then decides which of those runs are rushes, and only a rush within
+ * the warn distance of your island is shown. The panel lists them soonest first, and the bridge
+ * head is marked in the world.
  */
 public class RushRadarModule extends HudModule {
 
-    private static final double CREDIT_RADIUS = 5.5;
+    /** How far a block can be from the feet of whoever placed it, sideways and up or down. */
+    private static final double CREDIT_REACH = 4.5;
+    private static final double CREDIT_BELOW = 3.0;
+    private static final double CREDIT_ABOVE = 1.0;
     private static final long ALERT_COOLDOWN_MILLIS = 6000L;
 
     private final NumberSetting islandRadius = register(new NumberSetting(
             "Island Radius", "How far your island reaches from your bed", 12.0, 6.0, 30.0, 1.0, "m"));
+    private final NumberSetting warnDistance = register(new NumberSetting(
+            "Warn Distance", "How close to your island a bridge has to get before you are warned",
+            25.0, 5.0, 80.0, 1.0, "m"));
     private final BooleanSetting alerts = register(new BooleanSetting(
             "Alerts", "Pop a notification when a rush starts", true));
     private final BooleanSetting marker = register(new BooleanSetting(
@@ -76,19 +87,33 @@ public class RushRadarModule extends HudModule {
         long now = System.currentTimeMillis();
         if (event.getPacket() instanceof S23PacketBlockChange) {
             S23PacketBlockChange packet = (S23PacketBlockChange) event.getPacket();
-            if (packet.getBlockState() != null && packet.getBlockState().getBlock() != Blocks.air) {
+            if (isBridgeBlock(packet.getBlockState())) {
                 BlockPos pos = packet.getBlockPosition();
                 placements.add(new long[]{pos.getX(), pos.getY(), pos.getZ(), now});
             }
         } else if (event.getPacket() instanceof S22PacketMultiBlockChange) {
             for (S22PacketMultiBlockChange.BlockUpdateData update
                     : ((S22PacketMultiBlockChange) event.getPacket()).getChangedBlocks()) {
-                if (update.getBlockState() != null && update.getBlockState().getBlock() != Blocks.air) {
+                if (isBridgeBlock(update.getBlockState())) {
                     BlockPos pos = update.getPos();
                     placements.add(new long[]{pos.getX(), pos.getY(), pos.getZ(), now});
                 }
             }
         }
+    }
+
+    /**
+     * Whether a block could be part of a bridge. Leaves out air, and the non-solid and half-height
+     * changes a server sends all the time - doors, torches, crops, liquids - which say nothing about
+     * where anybody is going.
+     */
+    private static boolean isBridgeBlock(IBlockState state) {
+        if (state == null) {
+            return false;
+        }
+        Block block = state.getBlock();
+        return block != Blocks.air && block.isFullCube() && block.getMaterial().isSolid()
+                && !(block instanceof BlockBed);
     }
 
     @Override
@@ -107,7 +132,7 @@ public class RushRadarModule extends HudModule {
             return;
         }
         long now = System.currentTimeMillis();
-        rushes = tracker.rushes(own.centreX(), own.centreZ(), islandRadius.asDouble(), now);
+        rushes = tracker.rushes(own.centreX(), own.centreZ(), islandRadius.asDouble(), warnDistance.asDouble(), now);
         if (!alerts.value()) {
             return;
         }
@@ -122,16 +147,26 @@ public class RushRadarModule extends HudModule {
         }
     }
 
-    /** The nearest enemy to a new block, or null if nobody plausible was there. */
+    /**
+     * The enemy who placed a new block, or null if nobody plausible was there. A bridge block goes
+     * below the builder's feet, or level with them for a moment while jumping, and within reach
+     * sideways; anybody who does not fit that did not place it.
+     */
     private static EntityPlayer placerOf(Minecraft mc, double x, double y, double z) {
         EntityPlayer best = null;
-        double bestDistance = CREDIT_RADIUS * CREDIT_RADIUS;
+        double bestDistance = CREDIT_REACH * CREDIT_REACH;
         for (EntityPlayer player : mc.theWorld.playerEntities) {
-            if (player == mc.thePlayer || TeamResolver.isTeammate(player)
+            if (player == mc.thePlayer || player.isSpectator() || TeamResolver.isTeammate(player)
                     || Vantage.instance().friends().isFriend(player.getName())) {
                 continue;
             }
-            double distance = player.getDistanceSq(x, y, z);
+            double below = player.posY - y;
+            if (below > CREDIT_BELOW || below < -CREDIT_ABOVE) {
+                continue;
+            }
+            double dx = player.posX - x;
+            double dz = player.posZ - z;
+            double distance = dx * dx + dz * dz;
             if (distance < bestDistance) {
                 best = player;
                 bestDistance = distance;
