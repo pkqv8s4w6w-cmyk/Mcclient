@@ -1,0 +1,31 @@
+{
+  "required": true,
+  "minVersion": "0.7",
+  "package": "dev.vantage.mixin",
+  "refmap": "mixins.vantage.refmap.json",
+  "compatibilityLevel": "JAVA_8",
+  "injectors": {
+    "defaultRequire": 1
+  },
+  "client": [
+    "MixinEntity",
+    "MixinEntityLivingBase",
+    "MixinEntityPlayerSP",
+    "MixinEntityRenderer",
+    "MixinGameSettings",
+    "MixinMinecraft",
+    "MixinNetworkManager",
+    "MixinPlayerControllerMP",
+    "accessor.C03PacketPlayerAccessor",
+    "accessor.ChunkProviderClientAccessor",
+    "accessor.EntityLivingBaseAccessor",
+    "accessor.MinecraftAccessor",
+    "accessor.PlayerControllerMPAccessor",
+    "accessor.RenderManagerAccessor",
+    "accessor.S08PacketPlayerPosLookAccessor",
+    "accessor.S12PacketEntityVelocityAccessor",
+    "accessor.S14PacketEntityAccessor",
+    "accessor.S19PacketEntityHeadLookAccessor",
+    "accessor.S27PacketExplosionAccessor"
+  ]
+}
