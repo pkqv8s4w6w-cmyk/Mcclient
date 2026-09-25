@@ -39,8 +39,8 @@ Tagged **Blatant** in the menu where the advantage is obvious to anyone watching
 | Module | What it does |
 |---|---|
 | KillAura | Attacks targets around you. Single, Switch or Multi; silent or camera rotations with a turn-speed cap; fake or real autoblock; optional raytrace gate so it only swings once the rotation is on target |
-| AimAssist | Pulls your aim toward the nearest target while you click, per frame and scaled to frame time |
-| AutoClicker | Left and right clicking with a hand-shaped rate (drift, hiccups, no fixed interval), block hitting, and leaves block breaking alone |
+| AimAssist | Pulls your aim toward the nearest target while you click, per frame and scaled to frame time. Aims at the model as drawn, turns in whole mouse steps, and keeps helping for a moment between clicks |
+| AutoClicker | Left and right clicking with a hand-shaped rate (drift, hiccups, no fixed interval), and leaves block breaking alone. **Auto Block** times each enemy's clicking and blocks for the moment their next hit would land, allowing for your ping, only if it falls after your hit immunity and they will be in reach and aiming at you then |
 | TriggerBot | Attacks whatever valid target crosses the crosshair |
 | Reach | Hit from up to 6 blocks and build from up to 7. Past about 5.6 some hits get dropped, because the server measures from your feet to theirs |
 | Velocity | Scale knockback, cancel it, or jump-reset it; explosions included |
@@ -60,7 +60,8 @@ team, through walls. Friends are always skipped.
 follows the server's own rule), LongJump, HighJump, Step, NoFall, NoSlow, SafeWalk, InvMove,
 AntiVoid, Timer, Blink, Spider, TargetStrafe, and Toggle Sprint with an omni option.
 
-**Player:** Scaffold (silent block swaps, tower, keep-Y), FastPlace, FastBreak, AutoTool,
+**Player:** Scaffold (silent block swaps, tower, keep-Y, or a **Legit** mode that leaves the
+bridging to you and holds sneak at each block's edge, with optional auto place), FastPlace, FastBreak, AutoTool,
 ChestStealer, InvManager, AutoArmor, FastEat, NoRotate.
 
 **Visuals:** ESP (world box or on-screen frame with health), Nametags with gear, Tracers, Chams,
@@ -82,11 +83,11 @@ their own colour. If that is unclear, it goes by who stood beside the bed at the
 | Module | What it does |
 |---|---|
 | **Breach Planner** | Costs every block in an enemy bed's defence at the ticks your best hotbar tool takes to break it, then finds the cheapest route from open air to the bed. The route is drawn block by block with times, and summarised under the crosshair: *Red bed • 2 blocks • 0.5s • from the north*. **Auto** digs it for you, holding the right tool only for the packet that finishes each block, which is the only moment the server checks what you are holding |
-| **Rush Radar** | Credits each new block to the enemy standing beside it, and flags runs that are long, straight, still growing and aimed at your island. Tells you who, from which direction, how far, and when they arrive |
+| **Rush Radar** | Credits each new block to the enemy who could have placed it under their feet, and follows the bridge each player is building right now. Flags it only once it has kept going for a few seconds, is long and straight, started off your island, and would land on your island if it carried on - a bridge to mid or next door does not count. Warns when it is within the warn distance of your island: who, from which direction, how far, and when they arrive |
 | **Economy Tracker** | Counts every iron, gold, diamond and emerald each enemy picks up (the pickup packet names both the player and the item) and subtracts purchases it can see on them. Shows each team's bank and the dangerous things it could afford right now, such as a pearl or diamond armour |
 | **Bed Guard** | Remembers your bed defence. Alerts on every block an enemy breaks, with the side and how many layers from the bed, and when an enemy comes near. The panel is a top-down map of the layers left |
 | **Projectile Forecast** | Simulates enemy pearls to their landing spot, fireballs to their impact point and blast radius, and lit TNT with its fuse. Warns over the crosshair when one is landing on you. **Auto Deflect** hits incoming fireballs back |
-| **Void Clutch** | Simulates your own fall every tick. If it ends in the void, it places a block on the tick one can reach, or pearls you back to the last ground you stood on, aimed with the pearl's real ballistics. By default it only steps in after you were hit, not when you jump off on purpose |
+| **Void Clutch** | Simulates your own fall every tick from the moment you leave the ground. If it ends in the void, it places a block where your fall drops through a block height, building a short chain out from the nearest solid block when nothing touches that spot, or pearls you back to the last ground you stood on, aimed with the pearl's real ballistics. By default it only steps in after you were hit, not when you jump off on purpose |
 
 Also **BedNuker** (breaks enemy beds in range through walls, since the server checks distance and not sight),
 **BedESP** and **ItemESP** (dropped resources through walls, with counts).
