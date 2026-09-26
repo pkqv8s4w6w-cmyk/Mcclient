@@ -211,6 +211,17 @@ public final class RenderUtil {
         endShapes();
     }
 
+    public static void triangle(double x1, double y1, double x2, double y2, double x3, double y3, int colour) {
+        beginShapes();
+        applyColour(colour);
+        GL11.glBegin(GL11.GL_TRIANGLES);
+        GL11.glVertex2d(x1, y1);
+        GL11.glVertex2d(x2, y2);
+        GL11.glVertex2d(x3, y3);
+        GL11.glEnd();
+        endShapes();
+    }
+
     /**
      * A soft drop shadow, built from concentric rounded rectangles with falling alpha.
      *
