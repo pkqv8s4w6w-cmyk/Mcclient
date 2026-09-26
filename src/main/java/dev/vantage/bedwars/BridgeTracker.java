@@ -45,11 +45,9 @@ public final class BridgeTracker {
         public final double speed;
         /** Seconds until the bridge reaches your island at its current pace. */
         public final double etaSeconds;
-        /** Compass bearing from your bed to the bridge head, 0 north, clockwise. */
-        public final double bearing;
 
         Rush(String player, double headX, double headY, double headZ, double distance, double speed,
-             double etaSeconds, double bearing) {
+             double etaSeconds) {
             this.player = player;
             this.headX = headX;
             this.headY = headY;
@@ -57,13 +55,6 @@ public final class BridgeTracker {
             this.distance = distance;
             this.speed = speed;
             this.etaSeconds = etaSeconds;
-            this.bearing = bearing;
-        }
-
-        /** Bearing as an eight-point compass direction. */
-        public String direction() {
-            String[] points = {"north", "north-east", "east", "south-east", "south", "south-west", "west", "north-west"};
-            return points[(int) Math.floor(((bearing % 360.0) + 360.0) % 360.0 / 45.0 + 0.5) & 7];
         }
     }
 
@@ -86,7 +77,7 @@ public final class BridgeTracker {
     }
 
     /** Every player currently bridging at your bed, soonest arrival first. */
-    public synchronized List<Rush> rushes(double bedX, double bedZ, double islandRadius, long now) {
+    public synchronized List<Rush> rushes(double bedX, double bedZ, IslandShape island, long now) {
         List<Rush> found = new ArrayList<Rush>();
         Iterator<Map.Entry<String, Deque<double[]>>> entries = placements.entrySet().iterator();
         while (entries.hasNext()) {
@@ -99,7 +90,7 @@ public final class BridgeTracker {
                 entries.remove();
                 continue;
             }
-            Rush rush = analyse(entry.getKey(), new ArrayList<double[]>(list), bedX, bedZ, islandRadius, now);
+            Rush rush = analyse(entry.getKey(), new ArrayList<double[]>(list), bedX, bedZ, island, now);
             if (rush != null) {
                 found.add(rush);
             }
@@ -108,7 +99,7 @@ public final class BridgeTracker {
         return found;
     }
 
-    static Rush analyse(String player, List<double[]> run, double bedX, double bedZ, double islandRadius, long now) {
+    static Rush analyse(String player, List<double[]> run, double bedX, double bedZ, IslandShape island, long now) {
         if (run.size() < MIN_PLACEMENTS) {
             return null;
         }
@@ -151,8 +142,7 @@ public final class BridgeTracker {
         double headToBedX = bedX - head[0];
         double headToBedZ = bedZ - head[2];
         double distance = Math.sqrt(headToBedX * headToBedX + headToBedZ * headToBedZ);
-        double remaining = Math.max(0.0, distance - islandRadius);
-        double bearing = Math.toDegrees(Math.atan2(head[0] - bedX, -(head[2] - bedZ)));
-        return new Rush(player, head[0], head[1], head[2], distance, speed, remaining / speed, bearing);
+        double remaining = island.distanceTo(head[0], head[2]);
+        return new Rush(player, head[0], head[1], head[2], distance, speed, remaining / speed);
     }
 }
