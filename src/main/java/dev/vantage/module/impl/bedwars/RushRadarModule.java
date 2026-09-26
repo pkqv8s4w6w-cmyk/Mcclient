@@ -115,7 +115,7 @@ public class RushRadarModule extends HudModule {
             Long last = lastAlert.get(rush.player);
             if (last == null || now - last > ALERT_COOLDOWN_MILLIS) {
                 lastAlert.put(rush.player, now);
-                Notifications.post("Rush from the " + rush.direction(),
+                Notifications.post("Rush incoming",
                         String.format(Locale.ROOT, "%s  •  %.0fm  •  %s", rush.player, rush.distance, eta(rush)),
                         Notifications.Kind.DANGER, 4000L);
             }
@@ -174,7 +174,7 @@ public class RushRadarModule extends HudModule {
             return lines;
         }
         for (BridgeTracker.Rush rush : rushes) {
-            lines.add(String.format(Locale.ROOT, "%s  %s  %.0fm  %s", rush.player, rush.direction(), rush.distance, eta(rush)));
+            lines.add(String.format(Locale.ROOT, "%s  %.0fm  %s", rush.player, rush.distance, eta(rush)));
         }
         return lines;
     }

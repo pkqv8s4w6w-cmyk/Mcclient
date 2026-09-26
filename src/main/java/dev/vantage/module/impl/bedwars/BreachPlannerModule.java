@@ -6,7 +6,6 @@ import dev.vantage.event.MotionEvent;
 import dev.vantage.event.Render2DEvent;
 import dev.vantage.event.Render3DEvent;
 import dev.vantage.game.BedTracker;
-import dev.vantage.game.TeamColour;
 import dev.vantage.gui.Theme;
 import dev.vantage.gui.font.Fonts;
 import dev.vantage.gui.render.Render3D;
@@ -230,40 +229,6 @@ public class BreachPlannerModule extends Module {
                     RenderUtil.withAlpha(Theme.panel(), 210));
             Fonts.TINY.drawCentred(text, screen[0], screen[1] - 3.5f, Theme.text());
         }
-
-        String owner = bed.getOwner() == TeamColour.UNKNOWN ? "Enemy" : bed.getOwner().getDisplayName();
-        String summary;
-        if (plan == null) {
-            summary = owner + " bed is sealed in something unbreakable";
-        } else if (blocks.isEmpty()) {
-            summary = owner + " bed is open";
-        } else {
-            int total = 0;
-            for (BlockPos pos : blocks) {
-                total += grid.cost(pos.getX() - originX, pos.getY() - originY, pos.getZ() - originZ);
-            }
-            summary = String.format(Locale.ROOT, "%s bed  •  %d block%s  •  %.1fs  •  from the %s",
-                    owner, blocks.size(), blocks.size() == 1 ? "" : "s", total / 20.0, entrySide(blocks.get(0)));
-        }
-        float width = Fonts.SMALL.getWidth(summary) + 12.0f;
-        float x = resolution.getScaledWidth() / 2.0f - width / 2.0f;
-        float y = resolution.getScaledHeight() / 2.0f + 18.0f;
-        RenderUtil.roundedRect(x, y, width, 14.0f, 4.0, RenderUtil.withAlpha(Theme.panel(), 215));
-        RenderUtil.roundedRect(x + 3.0f, y + 3.0f, 2.0f, 8.0f, 1.0, Theme.accent());
-        Fonts.SMALL.drawString(summary, x + 8.0f, y + 2.5f, Theme.text());
-    }
-
-    /** Which side of the bed the route starts from. */
-    private String entrySide(BlockPos first) {
-        double dx = first.getX() + 0.5 - bed.centreX();
-        double dz = first.getZ() + 0.5 - bed.centreZ();
-        if (first.getY() > bed.y() + 1 && Math.abs(dx) < 2.0 && Math.abs(dz) < 2.0) {
-            return "top";
-        }
-        if (Math.abs(dx) > Math.abs(dz)) {
-            return dx > 0 ? "east" : "west";
-        }
-        return dz > 0 ? "south" : "north";
     }
 
     private void onMotion(MotionEvent event) {

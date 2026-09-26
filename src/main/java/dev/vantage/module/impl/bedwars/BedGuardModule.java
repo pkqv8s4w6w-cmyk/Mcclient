@@ -30,7 +30,7 @@ import java.util.Map;
  * Watches your bed's defence and tells you the moment it is being dug.
  *
  * <p>The blocks around your bed are remembered as they stand. When one disappears you are told
- * which side, how many layers from the bed, and who was standing next to it; blocks your team adds
+ * how many layers from the bed it was, and who was standing next to it; blocks your team adds
  * later are taken into the defence. The panel is a top-down map of how many layers cover each
  * column, with anything breached in red.
  */
@@ -164,7 +164,7 @@ public class BedGuardModule extends HudModule {
                 // Nobody hostile nearby: a teammate rearranging, or a block that simply changed.
                 continue;
             }
-            String line = side(pos) + ", layer " + layer(pos) + "  •  " + breaker.getName();
+            String line = (onTop(pos) ? "Top, layer " : "Layer ") + layer(pos) + "  •  " + breaker.getName();
             if (pendingBreaks.isEmpty()) {
                 firstPendingAt = System.currentTimeMillis();
             }
@@ -228,18 +228,12 @@ public class BedGuardModule extends HudModule {
         return Math.max(1, Math.max(dy, Math.max(dx, dz)));
     }
 
-    private String side(BlockPos pos) {
+    /** Whether a position sits over the bed rather than out to one side of it. */
+    private boolean onTop(BlockPos pos) {
         double centreX = (head.getX() + foot.getX()) / 2.0;
         double centreZ = (head.getZ() + foot.getZ()) / 2.0;
-        double dx = pos.getX() - centreX;
-        double dz = pos.getZ() - centreZ;
-        if (pos.getY() > head.getY() && Math.abs(dx) <= 1.0 && Math.abs(dz) <= 1.0) {
-            return "Top";
-        }
-        if (Math.abs(dx) > Math.abs(dz)) {
-            return dx > 0 ? "East" : "West";
-        }
-        return dz > 0 ? "South" : "North";
+        return pos.getY() > head.getY() && Math.abs(pos.getX() - centreX) <= 1.0
+                && Math.abs(pos.getZ() - centreZ) <= 1.0;
     }
 
     private static long columnKey(int x, int z) {

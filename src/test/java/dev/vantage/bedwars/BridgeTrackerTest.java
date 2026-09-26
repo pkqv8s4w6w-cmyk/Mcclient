@@ -33,7 +33,6 @@ class BridgeTrackerTest {
         assertEquals(1, rushes.size());
         BridgeTracker.Rush rush = rushes.get(0);
         assertEquals("Rusher", rush.player);
-        assertEquals("north", rush.direction());
         assertEquals(2.5, rush.speed, 0.1);
         // Head at z = -39: 39 blocks out, 27 to the island edge, at 2.5 a second.
         assertEquals(27.0 / 2.5, rush.etaSeconds, 0.5);
